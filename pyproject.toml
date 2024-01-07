@@ -1,0 +1,36 @@
+[project]
+name = "pyserato"
+description = "PySerato API."
+readme = "README.md"
+version = '0.0.1'
+authors = [
+    { name = "Luke Purnell", email = "luke.a.purnell@gmail.com" }
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "mypy",
+    "flake8",
+    "black",
+    "coverage",
+]
+test = [
+    "pytest",
+    "flake8>=6.1.0",
+    "mypy",
+    "coverage"
+]
+publish = [
+    "build",
+    "twine",
+    "wheel",
+    "setuptools",
+]
+
+
+[build-system]
+requires = ["setuptools>=68.0.0", "wheel", "setuptools_scm[toml]>=7.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
