@@ -32,3 +32,50 @@ if __name__ == '__main__':
     builder = Builder()
     builder.save(root_crate)
 ```
+
+The following shows two different methods for creating the following Crate structure:
+
+```python
+    #    -root
+    #        -lvl1_1
+    #             - lvl2_1
+    #             - lvl2_2
+```
+
+Option 1 (Depth First):
+
+```Python
+from pyserato.crate import Crate, Builder
+
+builder = Builder()
+lvl2_1 = Crate('lvl2_1')
+lvl2_1.add_song("/Users/lukepurnell/nav_music/Russian Circles/Gnosis/01 Tupilak.wav")
+lvl1_1 = Crate('lvl1_1', children=[lvl2_1])
+lvl1_1.add_song("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Entropy Increasing.mp3")
+root_crate = Crate('root', children=[lvl1_1])
+builder.save(root_crate)
+
+
+lvl2_2 = Crate('lvl2_2')
+lvl2_2.add_song("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Cloud Formation.mp3")
+lvl1_1 = Crate('lvl1_1', children=[lvl2_2])
+lvl1_1.add_song("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Entropy Increasing.mp3")
+root_crate = Crate('root', children=[lvl1_1])
+builder.save(root_crate)
+```
+
+Option 2 (Breadth First):
+
+```Python
+from pyserato.crate import Crate, Builder
+
+builder = Builder()
+lvl2_1 = Crate('lvl2_1')
+lvl2_1.add_song("/Users/lukepurnell/nav_music/Russian Circles/Gnosis/01 Tupilak.wav")
+lvl2_2 = Crate('lvl2_2')
+lvl2_2.add_song("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Cloud Formation.mp3")
+lvl1_1 = Crate('lvl1_1', children=[lvl2_1, lvl2_2])
+lvl1_1.add_song("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Entropy Increasing.mp3")
+root_crate = Crate('root', children=[lvl1_1])
+builder.save(root_crate)
+```
