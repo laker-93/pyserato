@@ -79,3 +79,13 @@ lvl1_1.add_song("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Ent
 root_crate = Crate('root', children=[lvl1_1])
 builder.save(root_crate)
 ```
+
+Songs added to crates must be unique. If not a DuplicateTrackError will be raised.
+For example:
+
+```python
+from pyserato.crate import Crate
+crate = Crate('foo')
+crate.add_song('foo/bar/track.mp3')
+crate.add_song('foo/bar/track.mp3') # raises DuplicateTrackError
+```
