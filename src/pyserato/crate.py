@@ -23,7 +23,7 @@ class Crate:
     def song_paths(self) -> set[Path]:
         return self._song_paths
 
-    def add_song(self, song_path: str, user_root: str = ""):
+    def add_song(self, song_path: Path, user_root: Optional[Path] = None):
         """
         Adds a unique song path to the crate. Raises DuplicateTrackError if song path is already present in the Crate.
         :param song_path:
@@ -31,7 +31,12 @@ class Crate:
         This is useful when run in a docker container and the path needs to refer to one on the host.
         :return:
         """
-        resolved = Path(user_root + song_path).resolve()
+        full_path = user_root / song_path if user_root else song_path
+        # note the path on the system may not yet exist. This is acceptable. As long as the path of the track is present
+        # on the host system where the Serato crates are located at the point of opening Serato, the tracks will be
+        # found.
+        # assert full_path.exists(), f"path of song does not exist {full_path}"
+        resolved = full_path.resolve()
         if resolved in self._song_paths:
             raise DuplicateTrackError(f"path {resolved} is already in the crate {self.name}")
         self._song_paths.add(resolved)
@@ -61,14 +66,65 @@ class Builder:
                     crates.append((child, path))
             yield crate, path.rstrip("%%") + ".crate"
 
+    @staticmethod
+    def _parse_crate_names(filepath: Path) -> Iterator[str]:
+        for name in str(filepath.name).split("%%"):
+            yield name.replace(".crate", "")
+
     def _build_crate_filepath(self, crate: Crate, serato_folder: Path) -> Iterator[tuple[Crate, Path]]:
         subcrate_folder = serato_folder / "SubCrates"
         for crate, paths in self._resolve_path(crate):
             yield crate, subcrate_folder / paths
 
+    def build_crates_from_filepath(self, filepath: Path) -> Crate:
+        """
+        Builds the crate tree from an existing file path.
+        :param filepath:
+        :return:
+        """
+        crate_names = list(self._parse_crate_names(filepath))
+        child_crate = None
+        crate = None
+        for crate_name in reversed(crate_names):
+            if child_crate is None:
+                crate = Crate(crate_name)
+                for song in self._parse_crate_songs(filepath):
+                    crate.add_song(song)
+                child_crate = crate
+            else:
+                crate = Crate(crate_name, children=[child_crate])
+                child_crate = crate
+        assert crate, f"no crates parsed from {filepath}"
+        return crate
+
+    @staticmethod
+    def _parse_crate_songs(filepath: Path) -> Iterator[Path]:
+        crate_content = filepath.read_bytes()
+        while crate_content:
+            otrk_idx = crate_content.find("otrk".encode())
+            if otrk_idx < 0:
+                break
+            assert "otrk".encode() == crate_content[otrk_idx: otrk_idx + len("otrk")]
+            ptrk_idx = crate_content.find("ptrk".encode())
+            otrk_section = crate_content[otrk_idx + len("otrk"): ptrk_idx]
+            len_data = util.hexbin_to_int(otrk_section) - 8
+            ptrk_size = util.int_to_hexbin(len_data)
+            data_section_start_idx = ptrk_idx + len("ptrk") + len(ptrk_size)
+            data_section = crate_content[data_section_start_idx:]
+            data_section_end_idx = data_section.find("otrk".encode())
+            if data_section_end_idx == -1:
+                data_section_end_idx = data_section_start_idx + len_data
+            data_section = data_section[:data_section_end_idx]
+            file_path = util.from_serato_string(data_section.decode())
+            if not file_path.startswith("/"):
+                file_path = "/" + file_path
+            yield Path(file_path)
+            crate_content = crate_content[data_section_start_idx + data_section_end_idx:]
+
     @staticmethod
     def _build_save_buffer(crate: Crate) -> bytes:
         header = ("vrsn   8 1 . 0 / S e r a t o   S c r a t c h L i v e   C r a t e").replace(" ", "\0")
+        # header = "vrsn 81.0/Serato ScratchLive Crate"
 
         playlist_section = bytes()
         if crate.song_paths:
