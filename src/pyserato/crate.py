@@ -1,10 +1,12 @@
 import os
+from copy import deepcopy
+from itertools import zip_longest
 from pathlib import Path
 from typing import Iterator, Optional
 from typing_extensions import Self
 
 from pyserato import util
-from pyserato.util import DuplicateTrackError
+from pyserato.util import DuplicateTrackError, serato_encode, serato_decode
 
 DEFAULT_SERATO_FOLDER = Path(os.path.expanduser("~/Music/_Serato_"))
 
@@ -36,7 +38,7 @@ class Crate:
         # on the host system where the Serato crates are located at the point of opening Serato, the tracks will be
         # found.
         # assert full_path.exists(), f"path of song does not exist {full_path}"
-        resolved = full_path.resolve()
+        resolved = full_path.expanduser().resolve()
         if resolved in self._song_paths:
             raise DuplicateTrackError(f"path {resolved} is already in the crate {self.name}")
         self._song_paths.add(resolved)
@@ -46,6 +48,38 @@ class Crate:
 
     def __repr__(self):
         return f"Crate<{self.name}>"
+
+    def __add__(self, other) -> "Crate":
+        assert self.name == other.name
+        children = self._children + other._children
+        children_copy = []
+        for child in children:
+            children_copy.append(deepcopy(child))
+        new = Crate(self.name, children=children_copy)
+        song_paths = self._song_paths | other._song_paths
+        for song in song_paths:
+            new.add_song(song)
+        return new
+
+    def __deepcopy__(self, memodict={}) -> "Crate":
+        children_copy = []
+        for child in self.children:
+            children_copy.append(deepcopy(child))
+        copy = Crate(self.name, children=children_copy)
+        memodict[id(self)] = copy
+        for song_path in self.song_paths:
+            copy.add_song(song_path)
+        return copy
+
+    def __eq__(self, other):
+        result = self.name == other.name and self._song_paths == other._song_paths
+        if self._children:
+            for child, other_child in zip_longest(self._children, other._children):
+                if child and other_child:
+                    result &= child == other_child
+                else:
+                    result = False
+        return result
 
 
 class Builder:
@@ -73,10 +107,24 @@ class Builder:
 
     def _build_crate_filepath(self, crate: Crate, serato_folder: Path) -> Iterator[tuple[Crate, Path]]:
         subcrate_folder = serato_folder / "SubCrates"
+        subcrate_folder.mkdir(exist_ok=True)
         for crate, paths in self._resolve_path(crate):
             yield crate, subcrate_folder / paths
 
-    def build_crates_from_filepath(self, filepath: Path) -> Crate:
+    def parse_crates_from_root_path(self, subcrate_path: Path) -> dict[str, Crate]:
+        crate_name_to_crate: dict[str, Crate] = {}
+        for f in subcrate_path.iterdir():
+            if not f.name.endswith('crate'):
+                continue
+            crate = self._build_crates_from_filepath(f)
+            if crate.name in crate_name_to_crate:
+                crate += crate_name_to_crate[crate.name]
+                crate_name_to_crate[crate.name] = crate
+            else:
+                crate_name_to_crate[crate.name] = crate
+        return crate_name_to_crate
+
+    def _build_crates_from_filepath(self, filepath: Path) -> Crate:
         """
         Builds the crate tree from an existing file path.
         :param filepath:
@@ -101,45 +149,69 @@ class Builder:
     def _parse_crate_songs(filepath: Path) -> Iterator[Path]:
         crate_content = filepath.read_bytes()
         while crate_content:
-            otrk_idx = crate_content.find("otrk".encode())
+            otrk_idx = crate_content.find("otrk".encode("utf-8"))
             if otrk_idx < 0:
                 break
-            assert "otrk".encode() == crate_content[otrk_idx: otrk_idx + len("otrk")]
-            ptrk_idx = crate_content.find("ptrk".encode())
-            otrk_section = crate_content[otrk_idx + len("otrk"): ptrk_idx]
-            len_data = util.hexbin_to_int(otrk_section) - 8
-            ptrk_size = util.int_to_hexbin(len_data)
-            data_section_start_idx = ptrk_idx + len("ptrk") + len(ptrk_size)
-            data_section = crate_content[data_section_start_idx:]
-            data_section_end_idx = data_section.find("otrk".encode())
-            if data_section_end_idx == -1:
-                data_section_end_idx = data_section_start_idx + len_data
-            data_section = data_section[:data_section_end_idx]
-            file_path = util.from_serato_string(data_section.decode())
+            assert "otrk".encode("utf-8") == crate_content[otrk_idx: otrk_idx + len("otrk")]
+            ptrk_idx = crate_content.find("ptrk".encode("utf-8"))
+            # Below would be the lgnth of the otrk data if needed for further parsing.
+            # otrk_section = crate_content[otrk_idx + len("otrk"): ptrk_idx]
+            # len_data = int.from_bytes(otrk_section, "big") - 8
+            ptrk_section = crate_content[ptrk_idx:]
+            track_name_length = int.from_bytes(ptrk_section[4:8], "big")
+            track_name_encoded = ptrk_section[8: 8 + track_name_length]
+            file_path = serato_decode(track_name_encoded)
             if not file_path.startswith("/"):
                 file_path = "/" + file_path
+
             yield Path(file_path)
-            crate_content = crate_content[data_section_start_idx + data_section_end_idx:]
+            crate_content = crate_content[ptrk_idx + 8 + track_name_length:]
 
     @staticmethod
     def _build_save_buffer(crate: Crate) -> bytes:
-        header = ("vrsn   8 1 . 0 / S e r a t o   S c r a t c h L i v e   C r a t e").replace(" ", "\0")
-        # header = "vrsn 81.0/Serato ScratchLive Crate"
+        header = "vrsn".encode("latin1")
+        # byteorder is redundant here for a size of 1 but is a required arg in Python 3.10-
+        header += (0).to_bytes(1, byteorder="big")
+        header += (0).to_bytes(1, byteorder="big")
+        header += serato_encode("81.0")
+        header += serato_encode("/Serato ScratchLive Crate")
+
+        # sorting = "osrt".encode('latin1')
+        # default_sorting_type = "song"
+        # default_sorting_rev = (1 << 8)
+        # sorting += (len(default_sorting_type) * 2 + 17).to_bytes(4, 'big')
+        # sorting += "tvcn".encode('latin1')
+        # sorting += (len(default_sorting_type) * 2).to_bytes(4, 'big')
+        # sorting += default_sorting_type.encode('utf-16')
+        # sorting += "brev".encode('latin1')
+        # sorting += (default_sorting_rev).to_bytes(5, 'big')
+        DEFAULT_COLUMNS = ["song", "artist", "album", "length"]
+        column_section = bytes()
+        for column in DEFAULT_COLUMNS:
+            column_section += "ovct".encode()
+            column_section += (len(column) * 2 + 18).to_bytes(4, "big")
+            column_section += "tvcn".encode()
+            column_section += (len(column) * 2).to_bytes(4, "big")
+            column_section += serato_encode(column)
+            column_section += "tvcw".encode()
+            column_section += (2).to_bytes(4, "big")
+            column_section += "0".encode()
+            column_section += "0".encode()
 
         playlist_section = bytes()
         if crate.song_paths:
             for song_path in crate.song_paths:
                 absolute_song_path = Path(song_path).resolve()
-                data = util.to_serato_string(str(absolute_song_path))
-                ptrk_size = util.int_to_hexbin(len(data))
-                otrk_size = util.int_to_hexbin(len(data) + 8)
-                playlist_section += "otrk".encode()
-                playlist_section += otrk_size
-                playlist_section += "ptrk".encode()
-                playlist_section += ptrk_size
-                playlist_section += data.encode()
 
-        contents = header.encode() + playlist_section
+                otrk_size = (len(str(absolute_song_path)) * 2 + 8).to_bytes(4, "big")
+                ptrk_size = (len(str(absolute_song_path)) * 2).to_bytes(4, "big")
+                playlist_section += "otrk".encode("latin1")
+                playlist_section += otrk_size
+                playlist_section += "ptrk".encode("latin1")
+                playlist_section += ptrk_size
+                playlist_section += serato_encode(str(absolute_song_path))
+
+        contents = header + column_section + playlist_section
         return contents
 
     def save(
