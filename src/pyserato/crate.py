@@ -36,7 +36,7 @@ class Crate:
         # on the host system where the Serato crates are located at the point of opening Serato, the tracks will be
         # found.
         # assert full_path.exists(), f"path of song does not exist {full_path}"
-        resolved = full_path.resolve()
+        resolved = full_path.expanduser().resolve()
         if resolved in self._song_paths:
             raise DuplicateTrackError(f"path {resolved} is already in the crate {self.name}")
         self._song_paths.add(resolved)
