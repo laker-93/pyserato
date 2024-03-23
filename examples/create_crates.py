@@ -35,14 +35,14 @@ if __name__ == '__main__':
 
 
 
-    crate = Crate('test-encoding91')
-    crate.add_song(Path("/Users/lukepurnell/Music/beets/Arca/Arca/10 Desafío.mp3"))
-    crate.add_song(Path("/Users/lukepurnell/Music/serato_export_test/subbox_export/Cloudkicker/Solitude/05 - I’m Glad You Still Have a Sense of Humor….flac"))
-    crate.add_song(Path("/Users/lukepurnell/Music/beets/Arca/Arca/04 Urchin.mp3"))
-    #crate.add_song(Path("…"))
-    builder.save(crate)
+    #crate = Crate('test-encoding92')
+    #crate.add_song(Path("/Users/lukepurnell/Music/beets/Arca/Arca/10 Desafío.mp3"))
+    #crate.add_song(Path("/Users/lukepurnell/Music/serato_export_test/subbox_export/Cloudkicker/Solitude/05 - I’m Glad You Still Have a Sense of Humor….flac"))
+    #crate.add_song(Path("/Users/lukepurnell/Music/beets/Arca/Arca/04 Urchin.mp3"))
+    ##crate.add_song(Path("…"))
+    #builder.save(crate)
 
-    #subcrates_folder = DEFAULT_SERATO_FOLDER / "SubCrates"
-    #for crate_path in subcrates_folder.glob("*crate"):
-    #    crate = builder.build_crates_from_filepath(crate_path)
-    #    print(crate)
+    subcrates_folder = DEFAULT_SERATO_FOLDER / "SubCrates"
+    for crate_path in subcrates_folder.glob("*crate"):
+        crate = builder.build_crates_from_filepath(crate_path)
+        print(crate)
