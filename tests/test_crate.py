@@ -244,3 +244,38 @@ def test_build_crate_from_filepath(tmp_path):
         if crate.children:
             assert crate.children[0].name == expected_crate.children[0].name
             assert crate.children[0].song_paths == expected_crate.children[0].song_paths
+
+def test_build_crate_from_filepath_with_various_file_encodings(tmp_path):
+    builder = Builder()
+    crates_to_content = {
+        "root%%child1.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e"
+                              b"\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t"
+                              b"\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a"
+                              b"\x00t\x00e",
+        "root%%child2.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e"
+                              b"\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t"
+                              b"\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a"
+                              b"\x00t\x00e",
+        "root.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a"
+                      b"\x00t\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a\x00t\x00e",
+    }
+    song_path = tmp_path / "foo" / "10 Desafío.mp3"
+    crates_to_content["root%%child2.crate"] += _create_encoded_playlist_section([song_path])
+
+    child2 = Crate("child2")
+    child2.add_song(song_path)
+    expected_crates = [
+        Crate("root", children=[Crate("child1")]),
+        Crate("root", children=[child2]),
+        Crate("root"),
+    ]
+    for i, (crate_name, contents) in enumerate(crates_to_content.items()):
+        path = tmp_path / Path(crate_name)
+        path.write_bytes(contents)
+        crate = builder.build_crates_from_filepath(path)
+        expected_crate = expected_crates[i]
+        assert crate.name == expected_crate.name
+        assert crate.song_paths == expected_crate.song_paths
+        if crate.children:
+            assert crate.children[0].name == expected_crate.children[0].name
+            assert crate.children[0].song_paths == expected_crate.children[0].song_paths

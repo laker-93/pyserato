@@ -18,6 +18,18 @@ def int_to_hexbin(number: int) -> bytes:
     return ret
 
 
+def chars_to_bytes(s: str) -> bytes:
+    result = []
+    for c in s:
+        result.append(
+            int.from_bytes(c.encode('utf16')) >> 0 & 255
+        )
+        result.append(
+            int.from_bytes(c.encode('utf16')) >> 8 & 255
+        )
+    return bytes(result)
+
+
 def hexbin_to_int(data: bytes) -> int:
     hex_str = "".join([format(byte, "02x") for byte in data])
     return int(hex_str, 16)

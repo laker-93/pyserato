@@ -19,8 +19,12 @@ if __name__ == '__main__':
     #             - lvl2_2
 
     builder = Builder()
-    crate = builder.build_crates_from_filepath(Path('/Users/lukepurnell/Music/_Serato_/Subcrates/root%%lvl1_1%%lvl2_1.crate'))
-    print(crate)
+    path = '/Users/lukepurnell/subbox/docker-compose/filebrowser/data/users/emc/Subcrates/all%%new serato crate%%nested%%new music.crate'
+    #path = '/Users/lukepurnell/Music/_Serato_/Subcrates/all%%new serato crate%%nested%%new music.crate'
+    #path = '/Users/lukepurnell/Music/_Serato_/Subcrates/all%%test.crate'
+    #path = '/Users/lukepurnell/Music/_Serato_/Subcrates/all%%NOPLAYLIST.crate'
+    #crate = builder.build_crates_from_filepath(Path(path))
+    #print(crate)
     #lvl2_1 = Crate('lvl2_1')
     #print(f"crate: {lvl2_1}")
     #lvl2_1.add_song(Path("/Users/lukepurnell/nav_music/Russian Circles/Gnosis/01 Tupilak.wav"))
@@ -31,11 +35,14 @@ if __name__ == '__main__':
 
 
 
-    #crate = Crate('test')
-    #crate.add_song(Path('/Users/lukepurnell/Music/Music/Justin Grounds - The Moon Pulled Us Here EP/Justin Grounds - The Moon Pulled Us Here EP - 05 Winds of the World.mp3'))
-    #builder.save(crate)
+    crate = Crate('test-encoding91')
+    crate.add_song(Path("/Users/lukepurnell/Music/beets/Arca/Arca/10 Desafío.mp3"))
+    crate.add_song(Path("/Users/lukepurnell/Music/serato_export_test/subbox_export/Cloudkicker/Solitude/05 - I’m Glad You Still Have a Sense of Humor….flac"))
+    crate.add_song(Path("/Users/lukepurnell/Music/beets/Arca/Arca/04 Urchin.mp3"))
+    #crate.add_song(Path("…"))
+    builder.save(crate)
 
-    subcrates_folder = DEFAULT_SERATO_FOLDER / "SubCrates"
-    for crate_path in subcrates_folder.glob("*crate"):
-        crate = builder.build_crates_from_filepath(crate_path)
-        print(crate)
+    #subcrates_folder = DEFAULT_SERATO_FOLDER / "SubCrates"
+    #for crate_path in subcrates_folder.glob("*crate"):
+    #    crate = builder.build_crates_from_filepath(crate_path)
+    #    print(crate)
