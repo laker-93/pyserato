@@ -1,31 +1,9 @@
+from copy import deepcopy
 from pathlib import Path
 import pytest
 
-from pyserato import util
 from pyserato.crate import Crate, Builder
 from pyserato.util import DuplicateTrackError
-
-
-def _create_encoded_playlist_section(song_paths: list[Path]) -> bytes:
-    """
-    Unfortunately, forced to use the code under test within the tests itself since we must dynamically set the buffer
-    to the path that is being used by the test. We cannot use a fixed fake data path as the full path is encoded in the
-    crate buffer and this full path will change depending on where the test is being run.
-    :param song_paths:
-    :return:
-    """
-    playlist_section = bytes()
-    for song_path in song_paths:
-        absolute_song_path = Path(song_path).resolve()
-        data = util.to_serato_string(str(absolute_song_path))
-        ptrk_size = util.int_to_hexbin(len(data))
-        otrk_size = util.int_to_hexbin(len(data) + 8)
-        playlist_section += "otrk".encode()
-        playlist_section += otrk_size
-        playlist_section += "ptrk".encode()
-        playlist_section += ptrk_size
-        playlist_section += data.encode()
-    return playlist_section
 
 
 @pytest.fixture
@@ -48,9 +26,45 @@ def root_crate(child_crate1, child_crate2):
     return root_crate
 
 
-def test_create_crate(tmp_path, root_crate, child_crate1, child_crate2):
+def test_crate_crate(tmp_path, root_crate, child_crate1, child_crate2):
     assert root_crate.children == [child_crate1, child_crate2]
     assert child_crate2.song_paths == {tmp_path / Path("fake_data/song.mp3")}
+
+
+def test_crate_equality(tmp_path, root_crate, child_crate1, child_crate2):
+    duplicate_root_crate = Crate("root", children=[child_crate1, child_crate2])
+    assert root_crate == duplicate_root_crate
+    child_crate3 = Crate("child3")
+    child_crate3.add_song(Path("foo.mp3"), user_root=tmp_path)
+    different_root_crate_with_extra_child = Crate("root", children=[child_crate1, child_crate2, child_crate3])
+    assert root_crate != different_root_crate_with_extra_child
+    different_root_crate_with_song_path = duplicate_root_crate
+    different_root_crate_with_song_path.add_song(Path("bar.mp3"))
+    assert root_crate != different_root_crate_with_song_path
+
+
+def test_crate_deepcopy(root_crate):
+    new_root = deepcopy(root_crate)
+    modified_child = new_root.children[0]
+    modified_child.add_song(Path("new_song.mp3"))
+    assert modified_child != root_crate.children[0]
+    assert root_crate != new_root
+
+
+def test_crate_add(root_crate):
+    child3 = Crate("child-3")
+    child3.add_song(Path("child3/foo.mp3"))
+    root_crate_2 = Crate("root", children=[child3])
+    new_root = root_crate + root_crate_2
+    assert new_root != root_crate
+    assert new_root != root_crate_2
+    assert len(new_root.children) == len(root_crate.children) + len(root_crate_2.children)
+    for new_root_child, child in zip(new_root.children, root_crate.children + root_crate_2.children):
+        assert new_root_child == child
+    # now test that the children of the new_root are distinct copies
+    new_root.children[0].add_song(Path("new_song.mp3"))
+    assert new_root.children[0].name == root_crate.children[0].name
+    assert new_root.children[0] != root_crate.children[0]
 
 
 def test_duplicate_tracks_error(tmp_path, root_crate):
@@ -65,29 +79,9 @@ def test_crate_builder(tmp_path, root_crate, child_crate1, child_crate2):
     subcrates_path.mkdir()
     builder = Builder()
     builder.save(root_crate, subcrates_path.parent)
-    crate_names_to_content = {}
-    expected_crate_names_content = {
-        "root%%child1.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e"
-        b"\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t"
-        b"\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a"
-        b"\x00t\x00e",
-        "root%%child2.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e"
-        b"\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t"
-        b"\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a"
-        b"\x00t\x00e",
-        "root.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e\x00r\x00a"
-        b"\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t\x00c\x00h"
-        b"\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a\x00t\x00e",
-    }
-    expected_crate_names_content["root%%child2.crate"] += _create_encoded_playlist_section(
-        list(child_crate2.song_paths)
-    )
-    for f in subcrates_path.iterdir():
-        crate_name = f.name
-        crate_content = f.read_bytes()
-        crate_names_to_content[crate_name] = crate_content
-
-    assert expected_crate_names_content == crate_names_to_content
+    expected_crates = {"root": root_crate}
+    actual_crates = builder.parse_crates_from_root_path(subcrates_path)
+    assert actual_crates == expected_crates
 
 
 def test_crate_no_overwrite(tmp_path):
@@ -99,55 +93,22 @@ def test_crate_no_overwrite(tmp_path):
     subcrates_path.mkdir()
     builder = Builder()
     builder.save(root_crate, subcrates_path.parent)
-    crate_names_to_content = {}
-    expected_crate_names_content = {
-        "root.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e\x00r\x00a"
-        b"\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t\x00c\x00h"
-        b"\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a\x00t\x00e",
-        "root%%child1.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c"
-        b"\x00r\x00a\x00t\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a\x00t\x00e",
-    }
-    expected_crate_names_content["root.crate"] += _create_encoded_playlist_section(list(root_crate.song_paths))
-
-    for f in subcrates_path.iterdir():
-        if f.is_file():
-            crate_name = f.name
-            crate_content = f.read_bytes()
-            crate_names_to_content[crate_name] = crate_content
-
-    assert expected_crate_names_content == crate_names_to_content
+    expected_crates = {"root": root_crate}
+    actual_crates = builder.parse_crates_from_root_path(subcrates_path)
+    assert actual_crates == expected_crates
 
     child_crate2 = Crate("child2")
     root_crate = Crate("root", children=[child_crate2])
     child_crate2.add_song(Path("foo/bar.mp3"), user_root=tmp_path)
-
     builder.save(root_crate, subcrates_path.parent)
-    crate_names_to_content = {}
-    expected_crate_names_content = {
-        "root%%child1.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e"
-        b"\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t"
-        b"\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a"
-        b"\x00t\x00e",
-        "root%%child2.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e"
-        b"\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t"
-        b"\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a"
-        b"\x00t\x00e",
-        "root.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e\x00r\x00a"
-        b"\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t\x00c\x00h"
-        b"\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a\x00t\x00e",
-    }
-    expected_crate_names_content["root%%child2.crate"] += _create_encoded_playlist_section(
-        list(child_crate2.song_paths)
-    )
-    expected_crate_names_content["root.crate"] += _create_encoded_playlist_section(list(child_crate2.song_paths))
-
-    for f in subcrates_path.iterdir():
-        if f.is_file():
-            crate_name = f.name
-            crate_content = f.read_bytes()
-            crate_names_to_content[crate_name] = crate_content
-
-    assert expected_crate_names_content == crate_names_to_content
+    expected_root = Crate("root", children=[child_crate1, child_crate2])
+    # when the root crate was saved for the second time above we DID NOT set the overwrite flag. Therefore since the
+    # path of the root crate already existed on disk, we do not expect the original root crate to be overwritten.
+    # Therefore we expect the root to have its original songs still.
+    expected_root.add_song(Path("foo/bar.mp3"), user_root=tmp_path)
+    expected_crates = {"root": expected_root}
+    actual_crates = builder.parse_crates_from_root_path(subcrates_path)
+    assert actual_crates == expected_crates
 
 
 def test_crate_overwrite(tmp_path):
@@ -159,88 +120,18 @@ def test_crate_overwrite(tmp_path):
 
     builder = Builder()
     builder.save(root_crate, subcrates_path.parent)
-    crate_names_to_content = {}
-    expected_crate_names_content = {
-        "root.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e\x00r\x00a"
-        b"\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t\x00c\x00h"
-        b"\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a\x00t\x00e",
-        "root%%child1.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c"
-        b"\x00r\x00a\x00t\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a\x00t\x00e",
-    }
-    expected_crate_names_content["root.crate"] += _create_encoded_playlist_section(list(root_crate.song_paths))
 
-    for f in subcrates_path.iterdir():
-        if f.is_file():
-            crate_name = f.name
-            crate_content = f.read_bytes()
-            crate_names_to_content[crate_name] = crate_content
-
-    assert expected_crate_names_content == crate_names_to_content
+    expected_crates = {"root": root_crate}
+    actual_crates = builder.parse_crates_from_root_path(subcrates_path)
+    assert actual_crates == expected_crates
 
     child_crate2 = Crate("child2")
     root_crate = Crate("root", children=[child_crate2])
     child_crate2.add_song(Path("foo/bar.mp3"), user_root=tmp_path)
 
     builder.save(root_crate, subcrates_path.parent, overwrite=True)
-    crate_names_to_content = {}
-
-    # here the contents of the root crate have been overwritten
-    expected_crate_names_content = {
-        "root%%child1.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e"
-        b"\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t"
-        b"\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a"
-        b"\x00t\x00e",
-        "root%%child2.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e"
-        b"\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t"
-        b"\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a"
-        b"\x00t\x00e",
-        "root.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a"
-        b"\x00t\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a\x00t\x00e",
-    }
-    expected_crate_names_content["root%%child2.crate"] += _create_encoded_playlist_section(
-        list(child_crate2.song_paths)
-    )
-
-    for f in subcrates_path.iterdir():
-        if f.is_file():
-            crate_name = f.name
-            crate_content = f.read_bytes()
-            crate_names_to_content[crate_name] = crate_content
-
-    assert expected_crate_names_content == crate_names_to_content
-
-
-def test_build_crate_from_filepath(tmp_path):
-    builder = Builder()
-    crates_to_content = {
-        "root%%child1.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e"
-        b"\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t"
-        b"\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a"
-        b"\x00t\x00e",
-        "root%%child2.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e"
-        b"\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a\x00t"
-        b"\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a"
-        b"\x00t\x00e",
-        "root.crate": b"vrsn\x00\x00\x008\x001\x00.\x000\x00/\x00S\x00e\x00r\x00a\x00t\x00o\x00\x00\x00S\x00c\x00r\x00a"
-        b"\x00t\x00c\x00h\x00L\x00i\x00v\x00e\x00\x00\x00C\x00r\x00a\x00t\x00e",
-    }
-    song_path = tmp_path / "foo" / "bar.mp3"
-    crates_to_content["root%%child2.crate"] += _create_encoded_playlist_section([song_path])
-
-    child2 = Crate("child2")
-    child2.add_song(song_path)
-    expected_crates = [
-        Crate("root", children=[Crate("child1")]),
-        Crate("root", children=[child2]),
-        Crate("root"),
-    ]
-    for i, (crate_name, contents) in enumerate(crates_to_content.items()):
-        path = tmp_path / Path(crate_name)
-        path.write_bytes(contents)
-        crate = builder.build_crates_from_filepath(path)
-        expected_crate = expected_crates[i]
-        assert crate.name == expected_crate.name
-        assert crate.song_paths == expected_crate.song_paths
-        if crate.children:
-            assert crate.children[0].name == expected_crate.children[0].name
-            assert crate.children[0].song_paths == expected_crate.children[0].song_paths
+    # when the root crate was saved for the second time above we DID set the overwrite flag. Therefore since the
+    # path of the root crate already existed on disk, we do expect the original root crate to be overwritten.
+    expected_crates = {"root": Crate("root", children=[child_crate1, child_crate2])}
+    actual_crates = builder.parse_crates_from_root_path(subcrates_path)
+    assert actual_crates == expected_crates
