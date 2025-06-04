@@ -2,7 +2,7 @@ from copy import deepcopy
 from pathlib import Path
 import pytest
 
-from pyserato.crate import Crate, Builder
+from pyserato.builder import Crate, Builder
 from pyserato.util import DuplicateTrackError
 
 

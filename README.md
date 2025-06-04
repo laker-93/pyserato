@@ -17,7 +17,7 @@ The following shows two different methods for creating and writing the following
 Option 1 (Depth First):
 
 ```Python
-from pyserato.crate import Crate, Builder
+from pyserato.builder import Crate, Builder
 
 builder = Builder()
 lvl2_1 = Crate('lvl2_1')
@@ -26,7 +26,6 @@ lvl1_1 = Crate('lvl1_1', children=[lvl2_1])
 lvl1_1.add_song("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Entropy Increasing.mp3")
 root_crate = Crate('root', children=[lvl1_1])
 builder.save(root_crate)
-
 
 lvl2_2 = Crate('lvl2_2')
 lvl2_2.add_song("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Cloud Formation.mp3")
@@ -39,7 +38,7 @@ builder.save(root_crate)
 Option 2 (Breadth First):
 
 ```Python
-from pyserato.crate import Crate, Builder
+from pyserato.builder import Crate, Builder
 
 builder = Builder()
 lvl2_1 = Crate('lvl2_1')
@@ -56,10 +55,11 @@ Songs added to crates must be unique. If not a DuplicateTrackError will be raise
 For example:
 
 ```python
-from pyserato.crate import Crate
+from pyserato.builder import Crate
+
 crate = Crate('foo')
 crate.add_song('foo/bar/track.mp3')
-crate.add_song('foo/bar/track.mp3') # raises DuplicateTrackError
+crate.add_song('foo/bar/track.mp3')  # raises DuplicateTrackError
 ```
 
 ## Reading Crates
@@ -71,6 +71,16 @@ subcrates_folder = DEFAULT_SERATO_FOLDER / "SubCrates"
 crates = builder.parse_crates_from_root_path(subcrates_folder)
 ```
 
+## Writing Cue Points
+
+```python
+from pyserato.builder import Crate
+
+crate = Crate('foo')
+song = crate.add_song('path/to/song.mp3')
+song.add_cue(time=1.23)
+
+```
 ## Serato Database Format
 
 Serato stores its crate information in a directory called _Serato_/Subcrates in the root of the drive where the music is located (this is true when the music is on a removable drive, unclear what happens when it's on the primary drive of the computer). Each file in this directory corresponds to one crate and will be named CrateName.crate.
