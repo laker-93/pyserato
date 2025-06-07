@@ -6,6 +6,9 @@ version = '0.0.2'
 authors = [
     { name = "Luke Purnell", email = "luke.a.purnell@gmail.com" }
 ]
+dependencies = [
+    "mutagen~=1.47"
+]
 
 
 [project.optional-dependencies]

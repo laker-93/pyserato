@@ -1,6 +1,8 @@
+import struct
 from dataclasses import dataclass, field
 from typing import Optional, List
 
+from pyserato.model.color_map import ColorMap
 from pyserato.model.hot_cue_type import HotCueType
 from pyserato.model.offset import Offset
 from pyserato.util import rgb_to_hex
@@ -10,7 +12,7 @@ from pyserato.util import rgb_to_hex
 class HotCue:
     name: str
     type: HotCueType
-    start: int
+    start: Optional[int]
     index: int
     end: Optional[int] = None
     offset: Optional[Offset] = None
@@ -61,3 +63,54 @@ class HotCue:
     @staticmethod
     def _value_error(offset_name: str, new_pos: int, old_pos: int) -> ValueError:
         return ValueError(f'{offset_name} cannot go below 0. New position: {new_pos}, old position: {old_pos}')
+
+    def to_v2_bytes(self) -> Optional[bytes]:
+        if self.type == HotCueType.CUE:
+            return self._cue_to_v2_bytes()
+        elif self.type == HotCueType.LOOP:
+            return self._loop_to_v2_bytes()
+        return None
+
+    def _loop_to_v2_bytes(self) -> bytes:
+        """
+                                            >B      c       I                   I               5s                      3s              >B      ?
+        NAME    NULL    STRUCT LEN          NULL    INDEX   POS START           POS END         SOMETHING               COLOR                   LOCKED  NAME        NULL
+        LOOP    \x00    \x00\x00\x00\x1f    \x00    \x00    \x00\x00\x00\xfe    \x00\x00\t%     \xff\xff\xff\xff\x00'   \xaa\xe1        \x00    \x00    first loop  \x00
+        :param entry_data:
+        :return:
+        """
+        data = b''.join((
+            struct.pack('>B', 0),
+            struct.pack('>B', self.index),
+            struct.pack('>I', self.start),
+            struct.pack('>I', self.end),
+            b'\xff\xff\xff\xff\x00',  # don't know what this is exactly
+            struct.pack('>3s', b'\xaa\xe1'), # color
+            struct.pack('>B', 0),
+            struct.pack('>?', False), # is_locked
+            self.name.encode('utf-8'),
+            struct.pack('>B', 0)
+        ))
+
+        return b''.join([b'LOOP', b'\x00', struct.pack('>I', len(data)), data])
+
+
+    def _cue_to_v2_bytes(self) -> bytes:
+
+        """
+        NAME   NULL  STRUCT LEN          NULL    INDEX   POS START           POS END   COLOR  NULL  LOCKED  NAME        NULL
+        CUE    \x00  \x00\x00\x00\x16    \x00    \x00    \x00\x00\x00\xfe    \x00      \xc0&& \x00  \x00    first bar   \x00
+        """
+        data = b''.join((
+            struct.pack('>B', 0),
+            struct.pack('>B', self.index),
+            struct.pack('>I', self.start),
+            struct.pack('>B', 0),
+            struct.pack('>3s', bytes.fromhex(ColorMap.to_serato(self.hex_color()))),
+            struct.pack('>B', 0),
+            struct.pack('>?', b'\x00'),
+            self.name.encode('utf-8'),
+            struct.pack('>B', 0)
+        ))
+        return b''.join([b'CUE', b'\x00', struct.pack('>I', len(data)), data])
+

@@ -1,20 +1,20 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 import logging
+from typing import Optional, Self
 
 from pyserato.model.hot_cue import HotCue
 from pyserato.model.hot_cue_type import HotCueType
 from pyserato.model.offset import Offset
 from pyserato.model.tempo import Tempo
-from pyserato.util import closest_offset
+from pyserato.util import closest_offset, split_string
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class Song:
-    path: str
-    location: Path
+@dataclass
+class Track:
+    path: Path
     track_id: str = ''
     average_bpm: float = 0.0
     date_added: str = ''
@@ -25,7 +25,25 @@ class Song:
     beatgrid: list[Tempo] = field(default_factory=list)
     hot_cues: list[HotCue] = field(default_factory=list)
     cue_loops: list[HotCue] = field(default_factory=list)
-    tag_data: dict = field(default_factory=dict)
+
+    @classmethod
+    def from_path(cls, path: Path | str, user_root: Optional[Path] = None) -> Self:
+        """
+        Adds a unique track path to the crate. Raises DuplicateTrackError if track path is already present in the Crate.
+        :param track_path:
+        :param user_root: Support adding an arbitrary root to the tracks.
+        This is useful when run in a docker container and the path needs to refer to one on the host.
+        :return:
+        """
+        if isinstance(path, str):
+            path = Path(path)
+        full_path = user_root / path if user_root else path
+        # note the path on the system may not yet exist. This is acceptable. As long as the path of the track is present
+        # on the host system where the Serato crates are located at the point of opening Serato, the tracks will be
+        # found.
+        # assert full_path.exists(), f"path of track does not exist {full_path}"
+        resolved = full_path.expanduser().resolve()
+        return Track(resolved)
 
     def add_beatgrid_marker(self, tempo: Tempo):
         self.beatgrid.append(tempo)
@@ -36,12 +54,6 @@ class Song:
             self.cue_loops.insert(at_index, hot_cue)
         else:
             self.hot_cues.insert(at_index, hot_cue)
-
-    def add_tag_data(self, source_name: str, tags: list):
-        self.tag_data[source_name] = tags
-
-    def get_tag_data(self, source_name: str):
-        return self.tag_data[source_name]
 
     def apply_beatgrid_offsets(self, offsets: list[Offset]):
         try:
@@ -56,3 +68,9 @@ class Song:
             logger.error(
                 f'Error: {e} | Track: {self.filename()}'
             )
+
+    def __eq__(self, other):
+        return self.path == other.path
+
+    def __hash__(self):
+        return hash(self.path)

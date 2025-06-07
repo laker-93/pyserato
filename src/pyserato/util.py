@@ -1,10 +1,18 @@
 import re
 from typing import Optional
 
+from pyserato.model.offset import Offset
+
 INVALID_CHARACTERS_REGEX = re.compile(r"[^A-Za-z0-9_ ]", re.IGNORECASE)
 
-from app.models.Offset import Offset
 
+def split_string(string: bytes, after: int = 72, delimiter: bytes = b'\n'):
+    pieces = []
+    while len(string) > 0:
+        pieces.append(string[:after])
+        string = string[after:]
+
+    return delimiter.join(pieces)
 
 def closest(number: float, values: list[float]) -> Optional[float]:
     closest_value = None

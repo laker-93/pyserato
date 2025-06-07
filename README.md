@@ -17,20 +17,21 @@ The following shows two different methods for creating and writing the following
 Option 1 (Depth First):
 
 ```Python
-from pyserato.builder import Crate, Builder
+from pyserato.model.crate import Crate
+from pyserato.builder import Builder
 
 builder = Builder()
 lvl2_1 = Crate('lvl2_1')
-lvl2_1.add_song("/Users/lukepurnell/nav_music/Russian Circles/Gnosis/01 Tupilak.wav")
+lvl2_1.add_track("/Users/lukepurnell/nav_music/Russian Circles/Gnosis/01 Tupilak.wav")
 lvl1_1 = Crate('lvl1_1', children=[lvl2_1])
-lvl1_1.add_song("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Entropy Increasing.mp3")
+lvl1_1.add_track("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Entropy Increasing.mp3")
 root_crate = Crate('root', children=[lvl1_1])
 builder.save(root_crate)
 
 lvl2_2 = Crate('lvl2_2')
-lvl2_2.add_song("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Cloud Formation.mp3")
+lvl2_2.add_track("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Cloud Formation.mp3")
 lvl1_1 = Crate('lvl1_1', children=[lvl2_2])
-lvl1_1.add_song("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Entropy Increasing.mp3")
+lvl1_1.add_track("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Entropy Increasing.mp3")
 root_crate = Crate('root', children=[lvl1_1])
 builder.save(root_crate)
 ```
@@ -38,15 +39,16 @@ builder.save(root_crate)
 Option 2 (Breadth First):
 
 ```Python
-from pyserato.builder import Crate, Builder
+from pyserato.model.crate import Crate
+from pyserato.builder import Builder
 
 builder = Builder()
 lvl2_1 = Crate('lvl2_1')
-lvl2_1.add_song("/Users/lukepurnell/nav_music/Russian Circles/Gnosis/01 Tupilak.wav")
+lvl2_1.add_track("/Users/lukepurnell/nav_music/Russian Circles/Gnosis/01 Tupilak.wav")
 lvl2_2 = Crate('lvl2_2')
-lvl2_2.add_song("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Cloud Formation.mp3")
+lvl2_2.add_track("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Cloud Formation.mp3")
 lvl1_1 = Crate('lvl1_1', children=[lvl2_1, lvl2_2])
-lvl1_1.add_song("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Entropy Increasing.mp3")
+lvl1_1.add_track("/Users/lukepurnell/nav_music/Laker/Noise From The Ruliad/00 Entropy Increasing.mp3")
 root_crate = Crate('root', children=[lvl1_1])
 builder.save(root_crate)
 ```
@@ -55,31 +57,41 @@ Songs added to crates must be unique. If not a DuplicateTrackError will be raise
 For example:
 
 ```python
-from pyserato.builder import Crate
+from pyserato.model.crate import Crate
 
 crate = Crate('foo')
-crate.add_song('foo/bar/track.mp3')
-crate.add_song('foo/bar/track.mp3')  # raises DuplicateTrackError
+crate.add_track('foo/bar/track.mp3')
+crate.add_track('foo/bar/track.mp3')  # raises DuplicateTrackError
 ```
 
 ## Reading Crates
 
 Reading Crates from file in to the `Crate` datastructure provided by this library.
 ```python
+from pyserato.builder import Builder
 builder = Builder()
 subcrates_folder = DEFAULT_SERATO_FOLDER / "SubCrates"
 crates = builder.parse_crates_from_root_path(subcrates_folder)
 ```
 
-## Writing Cue Points
+## Writing Cues & Loops
 
 ```python
-from pyserato.builder import Crate
+from pyserato.encoders.v2.v2_mp3_encoder import V2Mp3Encoder
+from pyserato.builder import Builder
+from pyserato.model.track import Track
+from pyserato.model.crate import Crate
+from pyserato.model.hot_cue import HotCue
+from pyserato.model.hot_cue_type import HotCueType
 
+mp3_encoder = V2Mp3Encoder()
+builder = Builder(encoder=mp3_encoder)
 crate = Crate('foo')
-song = crate.add_song('path/to/song.mp3')
-song.add_cue(time=1.23)
-
+track = Track.from_path('path/to/song.mp3')
+crate.add_track(track)
+track.add_hot_cue(HotCue(name='cue1', type=HotCueType.CUE, start=50, index=1))
+track.add_hot_cue(HotCue(name='loop1', type=HotCueType.LOOP, start=50, end=52, index=1))
+builder.save(crate)
 ```
 ## Serato Database Format
 

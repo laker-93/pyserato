@@ -1,14 +1,20 @@
 import os
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Optional
 
+from pyserato.encoders.base_encoder import BaseEncoder
 from pyserato.model.crate import Crate
+from pyserato.model.track import Track
 from pyserato.util import serato_encode, serato_decode
 
 DEFAULT_SERATO_FOLDER = Path(os.path.expanduser("~/Music/_Serato_"))
 
 
 class Builder:
+
+    def __init__(self, encoder: Optional[BaseEncoder] = None):
+        self._encoder = encoder
+
     @staticmethod
     def _resolve_path(root: Crate) -> Iterator[tuple[Crate, str]]:
         """
@@ -62,8 +68,9 @@ class Builder:
         for crate_name in reversed(crate_names):
             if child_crate is None:
                 crate = Crate(crate_name)
-                for song in self._parse_crate_songs(filepath):
-                    crate.add_song(song)
+                for file_path in self._parse_crate_tracks(filepath):
+                    track = Track.from_path(file_path)
+                    crate.add_track(track)
                 child_crate = crate
             else:
                 crate = Crate(crate_name, children=[child_crate])
@@ -72,7 +79,7 @@ class Builder:
         return crate
 
     @staticmethod
-    def _parse_crate_songs(filepath: Path) -> Iterator[Path]:
+    def _parse_crate_tracks(filepath: Path) -> Iterator[Path]:
         crate_content = filepath.read_bytes()
         while crate_content:
             otrk_idx = crate_content.find("otrk".encode("utf-8"))
@@ -93,8 +100,11 @@ class Builder:
             yield Path(file_path)
             crate_content = crate_content[ptrk_idx + 8 + track_name_length:]
 
-    @staticmethod
-    def _build_save_buffer(crate: Crate) -> bytes:
+    def _construct(self, crate: Crate) -> bytes:
+        """
+        Constructs the crate in bytes ready to save to disk.
+        Also writes any cues and meta info as tags to the track.
+        """
         header = "vrsn".encode("latin1")
         # byteorder is redundant here for a size of 1 but is a required arg in Python 3.10-
         header += (0).to_bytes(1, byteorder="big")
@@ -103,7 +113,7 @@ class Builder:
         header += serato_encode("/Serato ScratchLive Crate")
 
         # sorting = "osrt".encode('latin1')
-        # default_sorting_type = "song"
+        # default_sorting_type = "track"
         # default_sorting_rev = (1 << 8)
         # sorting += (len(default_sorting_type) * 2 + 17).to_bytes(4, 'big')
         # sorting += "tvcn".encode('latin1')
@@ -111,7 +121,7 @@ class Builder:
         # sorting += default_sorting_type.encode('utf-16')
         # sorting += "brev".encode('latin1')
         # sorting += (default_sorting_rev).to_bytes(5, 'big')
-        DEFAULT_COLUMNS = ["song", "artist", "album", "length"]
+        DEFAULT_COLUMNS = ["track", "artist", "album", "length"]
         column_section = bytes()
         for column in DEFAULT_COLUMNS:
             column_section += "ovct".encode()
@@ -125,17 +135,19 @@ class Builder:
             column_section += "0".encode()
 
         playlist_section = bytes()
-        if crate.song_paths:
-            for song_path in crate.song_paths:
-                absolute_song_path = Path(song_path).resolve()
+        if crate.tracks:
+            for track in crate.tracks:
+                if self._encoder:
+                    self._encoder.write(track)
+                absolute_track_path = Path(track.path).resolve()
 
-                otrk_size = (len(str(absolute_song_path)) * 2 + 8).to_bytes(4, "big")
-                ptrk_size = (len(str(absolute_song_path)) * 2).to_bytes(4, "big")
+                otrk_size = (len(str(absolute_track_path)) * 2 + 8).to_bytes(4, "big")
+                ptrk_size = (len(str(absolute_track_path)) * 2).to_bytes(4, "big")
                 playlist_section += "otrk".encode("latin1")
                 playlist_section += otrk_size
                 playlist_section += "ptrk".encode("latin1")
                 playlist_section += ptrk_size
-                playlist_section += serato_encode(str(absolute_song_path))
+                playlist_section += serato_encode(str(absolute_track_path))
 
         contents = header + column_section + playlist_section
         return contents
@@ -149,5 +161,5 @@ class Builder:
         for crate, filepath in self._build_crate_filepath(root, save_path):
             if filepath.exists() and overwrite is False:
                 continue
-            buffer = self._build_save_buffer(crate)
+            buffer = self._construct(crate)
             filepath.write_bytes(buffer)
