@@ -26,8 +26,8 @@ class Track:
     hot_cues: list[HotCue] = field(default_factory=list)
     cue_loops: list[HotCue] = field(default_factory=list)
 
-    @classmethod
-    def from_path(cls, path: Path | str, user_root: Optional[Path] = None) -> Self:
+    @staticmethod
+    def from_path(path: Path | str, user_root: Optional[Path] = None) -> Self:
         """
         Adds a unique track path to the crate. Raises DuplicateTrackError if track path is already present in the Crate.
         :param track_path:

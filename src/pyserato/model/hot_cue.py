@@ -1,11 +1,13 @@
 import struct
 from dataclasses import dataclass, field
-from typing import Optional, List
+from io import BytesIO
+from random import choice
+from typing import Optional, List, Self
 
 from pyserato.model.color_map import ColorMap
 from pyserato.model.hot_cue_type import HotCueType
 from pyserato.model.offset import Offset
-from pyserato.util import rgb_to_hex
+from pyserato.util import rgb_to_hex, hex_to_rgb
 
 
 @dataclass
@@ -16,8 +18,9 @@ class HotCue:
     index: int
     end: Optional[int] = None
     offset: Optional[Offset] = None
+    is_locked: Optional[bool] = None
 
-    _color: List[int] = field(default_factory=lambda: [0, 0, 0], repr=False)
+    _color: List[int] = field(default_factory=lambda: hex_to_rgb(choice(list(ColorMap.map.keys()))), repr=False)
 
     def __repr__(self):
         return 'Start: {start}{end} | Index: {index} | Name: `{name}`'.format(
@@ -114,3 +117,29 @@ class HotCue:
         ))
         return b''.join([b'CUE', b'\x00', struct.pack('>I', len(data)), data])
 
+
+    @staticmethod
+    def from_bytes(data: bytes, type: HotCueType) -> Self:
+        assert type == HotCueType.CUE, 'loop is unsupported. TODO implement'
+        fp = BytesIO(data)
+        fp.seek(1)  # first byte is NULL as it's a separator
+
+        index, start, end, _1, color, _2, locked, name =  (
+            struct.unpack('>B', fp.read(1))[0],  # INDEX
+            struct.unpack('>I', fp.read(4))[0],  # POSITION START
+            struct.unpack('>B', fp.read(1))[0],  # NULL separator (aka POSITION END)
+            None,  # aka. some field containing (4294967295, 39)
+            struct.unpack('>3s', fp.read(3))[0],  # COLOR
+            struct.unpack('>B', fp.read(1))[0],  # NULL separator
+            struct.unpack('>?', fp.read(1))[0],  # LOCKED
+            *fp.read().partition(b'\x00')[:-1]  # NAME + ending NULL separator
+        )
+        rgb = hex_to_rgb(color.decode())
+        hot_cue = HotCue(
+            name=name.decode('utf-8'),
+            type=HotCueType.CUE,
+            start=start,
+            index=index,
+        )
+        hot_cue.color = rgb
+        return hot_cue
