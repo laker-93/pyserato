@@ -49,6 +49,8 @@ class Track:
         self.beatgrid.append(tempo)
 
     def add_hot_cue(self, hot_cue: HotCue):
+        assert len(self.hot_cues) < 8, 'cannot have more than 8 hot cues on a track'
+        assert len(self.cue_loops) < 4, 'cannot have more than 4 loops on a track'
         at_index = hot_cue.index
         if hot_cue.type == HotCueType.LOOP:
             self.cue_loops.insert(at_index, hot_cue)

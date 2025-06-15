@@ -1,15 +1,24 @@
 import base64
 import struct
+from io import BytesIO
+from typing import List, Iterator
 
 from mutagen.mp3 import MP3
 from mutagen import id3
 
 from pyserato.encoders.base_encoder import BaseEncoder
+from pyserato.model.hot_cue import HotCue
+from pyserato.model.hot_cue_type import HotCueType
 from pyserato.model.track import Track
 from pyserato.util import split_string
 
 
 class V2Mp3Encoder(BaseEncoder):
+
+    @property
+    def fmt_version(self) -> str:
+        return 'BB'
+
     @property
     def tag_name(self) -> str:
         return 'GEOB:Serato Markers2'
@@ -25,6 +34,72 @@ class V2Mp3Encoder(BaseEncoder):
     def write(self, track: Track):
         tagged_file = self._write(track, self._encode(track))
         tagged_file.save()
+
+    def read_cues(self, track: Track) -> List[HotCue]:
+        tags = MP3(track.path)
+        tag_data = tags[self.tag_name]
+        data = tag_data.data
+        return list(self._decode(data))
+
+    def _decode(self, data: bytes) -> Iterator[HotCue]:
+        fp = BytesIO(data)
+        assert struct.unpack(self.fmt_version, fp.read(2)) == (0x01, 0x01)
+        payload = fp.read()
+        data = b''.join(self._remove_null_padding(payload).split(b'\n'))
+        data = self._pad_encoded_data(data)
+        decoded = base64.b64decode(data)
+
+        fp = BytesIO(decoded)
+        assert struct.unpack(self.fmt_version, fp.read(2)) == (0x01, 0x01)
+
+        while True:
+            entry_name = self._get_entry_name(fp)  # NULL byte between name and length is already omitted
+            if len(entry_name) == 0:
+                break  # End of data
+
+            struct_length = struct.unpack('>I', fp.read(4))[0]
+            assert struct_length > 0  # normally this should not happen
+            entry_data = fp.read(struct_length)
+
+            match entry_name:
+                case 'COLOR':
+                    # not yet implemented
+                    continue
+                case 'CUE':
+                    yield HotCue.from_bytes(entry_data, type=HotCueType.CUE)
+                case 'LOOP':
+                    # not yet implemented
+                    continue
+                case 'BPMLOCK':
+                    # not yet implemented
+                    continue
+
+    def _get_entry_count(self, buffer: BytesIO):
+        return struct.unpack('>I', buffer.read(4))[0]
+
+    def _remove_null_padding(self, payload: bytes):
+        """
+        Used when reading the data from the tags
+        """
+        return payload[:payload.index(b'\x00')]
+
+    def _get_entry_name(self, fp) -> str:
+        entry_name = b''
+        for x in iter(lambda: fp.read(1), b''):
+            if x == b'\00':
+                return entry_name.decode('utf-8')
+
+            entry_name += x
+
+        return ''
+
+    def _pad_encoded_data(self, data: bytes) -> bytes:
+        """
+        Used when reading the data from the tags
+        """
+        padding = b'A==' if len(data) % 4 == 1 else (b'=' * (-len(data) % 4))
+
+        return data + padding
 
     def _write(self, track: Track, payload: bytes) -> MP3:
         mutagen_file = MP3(track.path)

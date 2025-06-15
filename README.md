@@ -95,6 +95,7 @@ builder.save(crate)
 ```
 ## Serato Database Format
 
+See https://github.com/Holzhaus/serato-tags/
 Serato stores its crate information in a directory called _Serato_/Subcrates in the root of the drive where the music is located (this is true when the music is on a removable drive, unclear what happens when it's on the primary drive of the computer). Each file in this directory corresponds to one crate and will be named CrateName.crate.
 The crate hierachy tree is encoded in the CrateName.
 

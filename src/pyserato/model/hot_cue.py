@@ -122,7 +122,7 @@ class HotCue:
             fp.read().partition(b'\x00')[0]  # NAME + ending NULL separator
         )
         index, start, end, _1, color, _2, locked, name = result
-        color = SeratoColor(color.hex())
+        color = SeratoColor(color.hex().upper())
         hot_cue = HotCue(
             name=name.decode('utf-8'),
             type=HotCueType.CUE,
