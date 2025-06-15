@@ -4,7 +4,7 @@ from io import BytesIO
 from random import choice
 from typing import Optional, List, Self
 
-from pyserato.model.color_map import ColorMap
+from pyserato.model.serato_color import SeratoColor
 from pyserato.model.hot_cue_type import HotCueType
 from pyserato.model.offset import Offset
 from pyserato.util import rgb_to_hex, hex_to_rgb
@@ -18,9 +18,8 @@ class HotCue:
     index: int
     end: Optional[int] = None
     offset: Optional[Offset] = None
-    is_locked: Optional[bool] = None
-
-    _color: List[int] = field(default_factory=lambda: hex_to_rgb(choice(list(ColorMap.map.keys()))), repr=False)
+    is_locked: Optional[bool] = False
+    color: SeratoColor = SeratoColor.RED
 
     def __repr__(self):
         return 'Start: {start}{end} | Index: {index} | Name: `{name}`'.format(
@@ -29,19 +28,6 @@ class HotCue:
             start=str(f'{self.start}ms').ljust(10),
             end=str(f' | End: {self.end}ms').ljust(10) if self.end is not None else ''
         )
-
-    @property
-    def color(self) -> List[int]:
-        return self._color
-
-    @color.setter
-    def color(self, value: List[int]):
-        if not isinstance(value, list) or len(value) != 3 or not all(isinstance(i, int) for i in value):
-            raise ValueError("Color must be a list of three integers [R, G, B]")
-        self._color = value
-
-    def hex_color(self) -> str:
-        return rgb_to_hex(*self._color)
 
     def apply_offset(self):
         if self.offset is None:
@@ -109,13 +95,14 @@ class HotCue:
             struct.pack('>B', self.index),
             struct.pack('>I', self.start),
             struct.pack('>B', 0),
-            struct.pack('>3s', bytes.fromhex(ColorMap.to_serato(self.hex_color()))),
+            struct.pack('>3s', bytes.fromhex(self.color.value)),
             struct.pack('>B', 0),
             struct.pack('>?', b'\x00'),
             self.name.encode('utf-8'),
             struct.pack('>B', 0)
         ))
-        return b''.join([b'CUE', b'\x00', struct.pack('>I', len(data)), data])
+        payload = b''.join([b'CUE', b'\x00', struct.pack('>I', len(data)), data])
+        return payload
 
 
     @staticmethod
@@ -124,7 +111,7 @@ class HotCue:
         fp = BytesIO(data)
         fp.seek(1)  # first byte is NULL as it's a separator
 
-        index, start, end, _1, color, _2, locked, name =  (
+        result = (
             struct.unpack('>B', fp.read(1))[0],  # INDEX
             struct.unpack('>I', fp.read(4))[0],  # POSITION START
             struct.unpack('>B', fp.read(1))[0],  # NULL separator (aka POSITION END)
@@ -132,14 +119,15 @@ class HotCue:
             struct.unpack('>3s', fp.read(3))[0],  # COLOR
             struct.unpack('>B', fp.read(1))[0],  # NULL separator
             struct.unpack('>?', fp.read(1))[0],  # LOCKED
-            *fp.read().partition(b'\x00')[:-1]  # NAME + ending NULL separator
+            fp.read().partition(b'\x00')[0]  # NAME + ending NULL separator
         )
-        rgb = hex_to_rgb(color.decode())
+        index, start, end, _1, color, _2, locked, name = result
+        color = SeratoColor(color.hex())
         hot_cue = HotCue(
             name=name.decode('utf-8'),
             type=HotCueType.CUE,
+            color=color,
             start=start,
             index=index,
         )
-        hot_cue.color = rgb
         return hot_cue

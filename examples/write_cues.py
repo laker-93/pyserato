@@ -17,12 +17,39 @@ FMT_VERSION = 'BB'
 TAG_VERSION = b'\x01\x01'
 MARKERS_NAME = 'Serato Markers2'
 STRUCT_LENGTH = 0x16
+track_path = "/Users/lukepurnell/Downloads/Skee Mask - C/Skee Mask - C - 02 Bassline Dub.mp3"
+TAG_NAME_V1 = 'GEOB:Serato Overview'
+TAG_NAME_V1_2 = 'GEOB:Serato Markers_'
+TAG_NAME_V1_3 = 'GEOB:Serato Analysis'
+
+
+def clear_tags():
+    track = MP3(track_path)
+    tag_names = [TAG_NAME, TAG_NAME_V1, TAG_NAME_V1_2, TAG_NAME_V1_3]
+    #tag_names = [TAG_NAME]
+    for tn in tag_names:
+        try:
+            data = track.pop(tn)
+        except Exception:
+            pass
+        else:
+            print(data)
+    track.save()
+
 def read_tags():
-    tags = MP3("/Users/lukepurnell/Downloads/Skee Mask - C/Skee Mask - C - 01 MDP2.mp3")
+    tags = MP3(track_path)
     tag_data = tags[TAG_NAME]
     data = tag_data.data
-    print(data)
+    assert data
+    cues = list(_entry_data(data))
+    print(cues)
 
+
+def write_tags2():
+    track = MP3(track_path)
+    tag_data = track[TAG_NAME]
+    tag_data.data = b'\x01\x01AQFDVUUAAAAADQAAAAHqIwAfrSYAAQAA\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+    track.save()
 
 def _get_entry_count(buffer: BytesIO):
     return struct.unpack('>I', buffer.read(4))[0]
@@ -74,23 +101,29 @@ def _entry_data(data: bytes):
 
         match entry_name:
             case 'COLOR':
-                yield self._create_color_entry(struct.unpack('>c3s', entry_data))
+                continue
             case 'CUE':
-                yield self.__create_cue_entry(self._extract_cue_data(entry_data), EntryType.CUE)
+                yield HotCue.from_bytes(entry_data, type=HotCueType.CUE)
             case 'LOOP':
-                yield self.__create_cue_entry(self._extract_loop_data(entry_data), EntryType.LOOP)
+                continue
             case 'BPMLOCK':
-                yield self._create_bpm_lock_entry(struct.unpack('>?', entry_data))
+                continue
 
-def main():
+def write_tags():
     mp3_encoder = V2Mp3Encoder()
     builder = Builder(encoder=mp3_encoder)
     crate = Crate('test080625')
-    track = Track.from_path("/Users/lukepurnell/Downloads/Skee Mask - C/Skee Mask - C - 01 MDP2.mp3")
+    track = Track.from_path(track_path)
     crate.add_track(track)
-    track.add_hot_cue(HotCue(name='cue1', type=HotCueType.CUE, start=50, index=1))
-    track.add_hot_cue(HotCue(name='loop1', type=HotCueType.LOOP, start=50, end=52, index=1))
-    builder.save(crate)
+    track.add_hot_cue(HotCue(name='', type=HotCueType.CUE, start=1234, index=0))
+    track.add_hot_cue(HotCue(name='', type=HotCueType.CUE, start=2234, index=1))
+    track.add_hot_cue(HotCue(name='', type=HotCueType.CUE, start=3234, index=2))
+    track.add_hot_cue(HotCue(name='', type=HotCueType.CUE, start=3234, index=3))
+    track.add_hot_cue(HotCue(name='', type=HotCueType.CUE, start=3234, index=4))
+    builder.save(crate, overwrite=True)
 
 if __name__ == '__main__':
-    read_tags()
+    #write_tags2()
+    #read_tags()
+    clear_tags()
+    write_tags()

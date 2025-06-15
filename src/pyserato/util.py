@@ -44,9 +44,9 @@ def closest_offset(number: float, offsets: list[Offset]) -> Optional[Offset]:
 def rgb_to_hex(r: int, g: int, b: int) -> str:
     return '{:02x}{:02x}{:02x}'.format(r, g, b)
 
-def hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
+def hex_to_rgb(hex_str: str) -> list[int, int, int]:
     hex_str = hex_str.lstrip('#')  # Remove '#' if present
-    return tuple(int(hex_str[i:i+2], 16) for i in (0, 2, 4))
+    return list(int(hex_str[i:i+2], 16) for i in (0, 2, 4))
 
 def serato_decode(s: bytes) -> str:
     """
