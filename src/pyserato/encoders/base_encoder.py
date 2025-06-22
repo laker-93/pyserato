@@ -1,12 +1,9 @@
 from abc import abstractmethod, ABC
 
-from mutagen import FileType as MutagenFile
-
 from pyserato.model.track import Track
 
 
 class BaseEncoder(ABC):
-
 
     @property
     @abstractmethod
@@ -26,5 +23,3 @@ class BaseEncoder(ABC):
     @abstractmethod
     def write(self, track: Track):
         pass
-
-

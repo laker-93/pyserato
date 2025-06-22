@@ -1,13 +1,11 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 import logging
-from typing import Optional, Self
+from typing import Optional
 
 from pyserato.model.hot_cue import HotCue
 from pyserato.model.hot_cue_type import HotCueType
-from pyserato.model.offset import Offset
 from pyserato.model.tempo import Tempo
-from pyserato.util import closest_offset, split_string
 
 logger = logging.getLogger(__name__)
 
@@ -15,11 +13,11 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Track:
     path: Path
-    track_id: str = ''
+    track_id: str = ""
     average_bpm: float = 0.0
-    date_added: str = ''
-    play_count: str = ''
-    tonality: str = ''
+    date_added: str = ""
+    play_count: str = ""
+    tonality: str = ""
     total_time: float = 0.0
 
     beatgrid: list[Tempo] = field(default_factory=list)
@@ -27,7 +25,7 @@ class Track:
     cue_loops: list[HotCue] = field(default_factory=list)
 
     @staticmethod
-    def from_path(path: Path | str, user_root: Optional[Path] = None) -> Self:
+    def from_path(path: Path | str, user_root: Optional[Path] = None) -> "Track":
         """
         Adds a unique track path to the crate. Raises DuplicateTrackError if track path is already present in the Crate.
         :param track_path:
@@ -49,27 +47,26 @@ class Track:
         self.beatgrid.append(tempo)
 
     def add_hot_cue(self, hot_cue: HotCue):
-        assert len(self.hot_cues) < 8, 'cannot have more than 8 hot cues on a track'
-        assert len(self.cue_loops) < 4, 'cannot have more than 4 loops on a track'
+        assert len(self.hot_cues) < 8, "cannot have more than 8 hot cues on a track"
+        assert len(self.cue_loops) < 4, "cannot have more than 4 loops on a track"
         at_index = hot_cue.index
         if hot_cue.type == HotCueType.LOOP:
             self.cue_loops.insert(at_index, hot_cue)
         else:
             self.hot_cues.insert(at_index, hot_cue)
 
-    def apply_beatgrid_offsets(self, offsets: list[Offset]):
-        try:
-            for hot_cue in self.hot_cues:
-                hot_cue.offset = closest_offset(hot_cue.start, offsets)
-                hot_cue.apply_offset()
+    # TODO
+    # def apply_beatgrid_offsets(self, offsets: list[Offset]):
+    #     try:
+    #         for hot_cue in self.hot_cues:
+    #             hot_cue.offset = closest_offset(hot_cue.start, offsets)
+    #             hot_cue.apply_offset()
 
-            for loop in self.cue_loops:
-                loop.offset = closest_offset(loop.start, offsets)
-                loop.apply_offset()
-        except ValueError as e:
-            logger.error(
-                f'Error: {e} | Track: {self.filename()}'
-            )
+    #         for loop in self.cue_loops:
+    #             loop.offset = closest_offset(loop.start, offsets)
+    #             loop.apply_offset()
+    #     except ValueError as e:
+    #         logger.error(f"Error: {e} | Track: {self.filename()}")
 
     def __eq__(self, other):
         return self.path == other.path

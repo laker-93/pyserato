@@ -46,7 +46,7 @@ class Builder:
     def parse_crates_from_root_path(self, subcrate_path: Path) -> dict[str, Crate]:
         crate_name_to_crate: dict[str, Crate] = {}
         for f in subcrate_path.iterdir():
-            if not f.name.endswith('crate'):
+            if not f.name.endswith("crate"):
                 continue
             crate = self._build_crates_from_filepath(f)
             if crate.name in crate_name_to_crate:

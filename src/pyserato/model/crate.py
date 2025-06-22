@@ -1,6 +1,5 @@
 from copy import deepcopy
 from itertools import zip_longest
-from pathlib import Path
 from typing import Optional, Self
 
 from pyserato.model.track import Track

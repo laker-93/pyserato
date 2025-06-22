@@ -1,6 +1,6 @@
 from mutagen.mp3 import MP3
 
-from pyserato.encoders.v2.v2_mp3_encoder import V2Mp3Encoder
+from pyserato.encoders.v2_mp3_encoder import V2Mp3Encoder
 from pyserato.builder import Builder
 from pyserato.model.track import Track
 from pyserato.model.crate import Crate

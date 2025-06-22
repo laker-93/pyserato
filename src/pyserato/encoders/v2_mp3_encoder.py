@@ -7,6 +7,7 @@ from mutagen.mp3 import MP3
 from mutagen import id3
 
 from pyserato.encoders.base_encoder import BaseEncoder
+from pyserato.encoders.serato_tags import SERATO_MARKERS_V2
 from pyserato.model.hot_cue import HotCue
 from pyserato.model.hot_cue_type import HotCueType
 from pyserato.model.track import Track
@@ -17,19 +18,19 @@ class V2Mp3Encoder(BaseEncoder):
 
     @property
     def fmt_version(self) -> str:
-        return 'BB'
+        return "BB"
 
     @property
     def tag_name(self) -> str:
-        return 'GEOB:Serato Markers2'
+        return SERATO_MARKERS_V2
 
     @property
     def tag_version(self) -> bytes:
-        return b'\x01\x01'
+        return b"\x01\x01"
 
     @property
     def markers_name(self) -> str:
-        return 'Serato Markers2'
+        return "Serato Markers2"
 
     def write(self, track: Track):
         tagged_file = self._write(track, self._encode(track))
@@ -45,7 +46,7 @@ class V2Mp3Encoder(BaseEncoder):
         fp = BytesIO(data)
         assert struct.unpack(self.fmt_version, fp.read(2)) == (0x01, 0x01)
         payload = fp.read()
-        data = b''.join(self._remove_null_padding(payload).split(b'\n'))
+        data = b"".join(self._remove_null_padding(payload).split(b"\n"))
         data = self._pad_encoded_data(data)
         decoded = base64.b64decode(data)
 
@@ -57,47 +58,47 @@ class V2Mp3Encoder(BaseEncoder):
             if len(entry_name) == 0:
                 break  # End of data
 
-            struct_length = struct.unpack('>I', fp.read(4))[0]
+            struct_length = struct.unpack(">I", fp.read(4))[0]
             assert struct_length > 0  # normally this should not happen
             entry_data = fp.read(struct_length)
 
             match entry_name:
-                case 'COLOR':
+                case "COLOR":
                     # not yet implemented
                     continue
-                case 'CUE':
-                    yield HotCue.from_bytes(entry_data, type=HotCueType.CUE)
-                case 'LOOP':
+                case "CUE":
+                    yield HotCue.from_bytes(entry_data, hotcue_type=HotCueType.CUE)
+                case "LOOP":
                     # not yet implemented
                     continue
-                case 'BPMLOCK':
+                case "BPMLOCK":
                     # not yet implemented
                     continue
 
     def _get_entry_count(self, buffer: BytesIO):
-        return struct.unpack('>I', buffer.read(4))[0]
+        return struct.unpack(">I", buffer.read(4))[0]
 
     def _remove_null_padding(self, payload: bytes):
         """
         Used when reading the data from the tags
         """
-        return payload[:payload.index(b'\x00')]
+        return payload[: payload.index(b"\x00")]
 
     def _get_entry_name(self, fp) -> str:
-        entry_name = b''
-        for x in iter(lambda: fp.read(1), b''):
-            if x == b'\00':
-                return entry_name.decode('utf-8')
+        entry_name = b""
+        for x in iter(lambda: fp.read(1), b""):
+            if x == b"\00":
+                return entry_name.decode("utf-8")
 
             entry_name += x
 
-        return ''
+        return ""
 
     def _pad_encoded_data(self, data: bytes) -> bytes:
         """
         Used when reading the data from the tags
         """
-        padding = b'A==' if len(data) % 4 == 1 else (b'=' * (-len(data) % 4))
+        padding = b"A==" if len(data) % 4 == 1 else (b"=" * (-len(data) % 4))
 
         return data + padding
 
@@ -105,7 +106,7 @@ class V2Mp3Encoder(BaseEncoder):
         mutagen_file = MP3(track.path)
         mutagen_file[self.tag_name] = id3.GEOB(
             encoding=0,
-            mime='application/octet-stream',
+            mime="application/octet-stream",
             desc=self.markers_name,
             data=payload,
         )
@@ -113,11 +114,10 @@ class V2Mp3Encoder(BaseEncoder):
         return mutagen_file
 
     def _encode(self, track: Track) -> bytes:
-        payload = b''
+        payload = b""
         for cue in track.hot_cues:
             payload += cue.to_v2_bytes()
         return self._pad(payload)
-
 
     def _pad(self, payload: bytes, entries_count: int | None = None):
         """
@@ -134,13 +134,13 @@ class V2Mp3Encoder(BaseEncoder):
         payload = self._enrich_payload(payload, entries_count)
 
         return payload
+
     @staticmethod
     def _remove_encoded_data_pad(data: bytes):
         """
         Used when after the base64 encode when writing data to the tags
         """
-        return data.replace(b'=', b'A')
-
+        return data.replace(b"=", b"A")
 
     @staticmethod
     def _pad_payload(payload: bytes):
@@ -149,13 +149,13 @@ class V2Mp3Encoder(BaseEncoder):
         """
         length = len(payload)
         if length < 468:
-            return payload.ljust(468, b'\x00')
+            return payload.ljust(468, b"\x00")
 
-        return payload.ljust(982, b'\x00') + b'\x00'
+        return payload.ljust(982, b"\x00") + b"\x00"
 
     def _enrich_payload(self, payload: bytes, entries_count: int | None = None):
         header = self.tag_version
         if entries_count is not None:
-            header += struct.pack('>I', entries_count)
+            header += struct.pack(">I", entries_count)
 
         return header + payload
