@@ -1,6 +1,7 @@
 from copy import deepcopy
 from itertools import zip_longest
-from typing import Optional, Self
+from typing import Optional
+from typing_extensions import Self
 
 from pyserato.model.track import Track
 from pyserato.util import sanitize_filename, DuplicateTrackError
