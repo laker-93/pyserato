@@ -82,7 +82,10 @@ def test_crate_builder(tmp_path, root_crate, child_crate1, child_crate2):
     builder.save(root_crate, subcrates_path.parent)
     expected_crates = {"root": root_crate}
     actual_crates = builder.parse_crates_from_root_path(subcrates_path)
-    assert actual_crates == expected_crates
+    print(root_crate._tracks)
+    print(actual_crates)
+    assert len(actual_crates) == len(expected_crates)
+    assert actual_crates["root"] == expected_crates["root"]
 
 
 def test_crate_no_overwrite(tmp_path):
