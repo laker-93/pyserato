@@ -83,18 +83,7 @@ def test_crate_builder(tmp_path, root_crate, child_crate1, child_crate2):
     builder.save(root_crate, subcrates_path.parent)
     expected_crates = {"root": root_crate}
     actual_crates = builder.parse_crates_from_root_path(subcrates_path)
-    print(root_crate._tracks)
-    print(actual_crates)
-    assert len(actual_crates) == len(expected_crates)
-    children1 = sorted(actual_crates["root"]._children, key=lambda c: len(c.tracks))
-    children2 = sorted(expected_crates["root"]._children, key=lambda c: len(c.tracks))
-    print(f"{children1=}")
-    print(f"{children2=}")
-    for child, other_child in zip_longest(children1, children2):
-        print('checking first children')
-        if child and other_child:
-            assert child.tracks == other_child.tracks, f'child tracks {child.tracks} other child tracks {other_child.tracks}'
-
+    assert actual_crates == expected_crates
 
 
 def test_crate_no_overwrite(tmp_path):

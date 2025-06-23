@@ -64,7 +64,10 @@ class Crate:
             return False
         result = True
         if self._children:
-            for child, other_child in zip_longest(self._children, other._children):
+            # sort so order is deterministic
+            children = sorted(self._children, key=lambda c: len(c.tracks))
+            other_children = sorted(other._children, key=lambda c: len(c.tracks))
+            for child, other_child in zip_longest(children, other_children):
                 if child and other_child:
                     result &= child == other_child
                 else:
