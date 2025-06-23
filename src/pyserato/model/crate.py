@@ -58,11 +58,7 @@ class Crate:
         return copy
 
     def __eq__(self, other):
-        if self.name != other.name:
-            return False
-        if self._tracks != other._tracks:
-            return False
-        result = True
+        result = self.name == other.name and self._tracks == other._tracks
         if self._children:
             # sort so order is deterministic
             children = sorted(self._children, key=lambda c: len(c.tracks))
