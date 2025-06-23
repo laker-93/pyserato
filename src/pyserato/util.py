@@ -3,6 +3,15 @@ import re
 INVALID_CHARACTERS_REGEX = re.compile(r"[^A-Za-z0-9_ ]", re.IGNORECASE)
 
 
+def split_string(string: bytes, after: int = 72, delimiter: bytes = b"\n"):
+    pieces = []
+    while len(string) > 0:
+        pieces.append(string[:after])
+        string = string[after:]
+
+    return delimiter.join(pieces)
+
+
 def serato_decode(s: bytes) -> str:
     """
     Decode a string that's been encoded in to bytes Serato style.
@@ -33,11 +42,6 @@ def serato_encode(s: str) -> bytes:
         result.append(int.from_bytes(c.encode("utf16"), byteorder="big") >> 0 & 255)
         result.append(int.from_bytes(c.encode("utf16"), byteorder="big") >> 8 & 255)
     return bytes(result)
-
-
-def hexbin_to_int(data: bytes) -> int:
-    hex_str = "".join([format(byte, "02x") for byte in data])
-    return int(hex_str, 16)
 
 
 def sanitize_filename(filename: str) -> str:

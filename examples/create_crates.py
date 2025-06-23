@@ -1,5 +1,5 @@
 from pathlib import Path
-from pyserato.crate import DEFAULT_SERATO_FOLDER, Crate, Builder
+from pyserato.builder import DEFAULT_SERATO_FOLDER, Crate, Builder
 
 
 def list_crates(serato_folder: Path = DEFAULT_SERATO_FOLDER) -> list[Crate]:
