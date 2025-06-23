@@ -1,5 +1,4 @@
 from copy import deepcopy
-from itertools import zip_longest
 from pathlib import Path
 import pytest
 

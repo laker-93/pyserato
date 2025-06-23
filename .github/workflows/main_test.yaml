@@ -23,7 +23,7 @@ jobs:
           pip install -e .[test]
       - name: Test with pytest
         run: |
-          coverage run -m pytest tests
-          coverage report --fail-under=95
           flake8 --max-line-length=120 src tests
           mypy src tests
+          coverage run -m pytest tests
+          coverage report --fail-under=95
