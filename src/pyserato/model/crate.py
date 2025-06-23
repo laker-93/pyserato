@@ -58,7 +58,11 @@ class Crate:
         return copy
 
     def __eq__(self, other):
-        result = self.name == other.name and self._tracks == other._tracks
+        if self.name != other.name:
+            return False
+        if self._tracks != other._tracks:
+            return False
+        result = True
         if self._children:
             for child, other_child in zip_longest(self._children, other._children):
                 if child and other_child:

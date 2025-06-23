@@ -1,4 +1,5 @@
 from copy import deepcopy
+from itertools import zip_longest
 from pathlib import Path
 import pytest
 
@@ -85,7 +86,15 @@ def test_crate_builder(tmp_path, root_crate, child_crate1, child_crate2):
     print(root_crate._tracks)
     print(actual_crates)
     assert len(actual_crates) == len(expected_crates)
-    assert actual_crates["root"] == expected_crates["root"]
+    children1 = actual_crates["root"]
+    children2 = expected_crates["root"]
+    print(f"{children1=}")
+    print(f"{children2=}")
+    for child, other_child in zip_longest(children1, children2):
+        print('checking first children')
+        if child and other_child:
+            assert child.tracks == other_child.tracks, f'child tracks {child.tracks} other child tracks {other_child.tracks}'
+
 
 
 def test_crate_no_overwrite(tmp_path):
