@@ -86,8 +86,8 @@ def test_crate_builder(tmp_path, root_crate, child_crate1, child_crate2):
     print(root_crate._tracks)
     print(actual_crates)
     assert len(actual_crates) == len(expected_crates)
-    children1 = actual_crates["root"]
-    children2 = expected_crates["root"]
+    children1 = actual_crates["root"]._children
+    children2 = expected_crates["root"]._children
     print(f"{children1=}")
     print(f"{children2=}")
     for child, other_child in zip_longest(children1, children2):
