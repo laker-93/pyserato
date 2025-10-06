@@ -29,7 +29,7 @@ def _get_entry_name(fp) -> str:
     return ""
 
 
-def test_from_bytes_roundtrip():
+def test_cue_from_bytes_roundtrip():
     original = HotCue(name="cue_test", type=HotCueType.CUE, start=12345, index=3, color=SeratoColor.RED)
     bytes_data = original.to_v2_bytes()
     fp = BytesIO(bytes_data)
@@ -44,7 +44,18 @@ def test_from_bytes_roundtrip():
     assert parsed.start == original.start
     assert parsed.color == original.color
 
-
-def test_from_bytes_rejects_loop_type():
-    with pytest.raises(AssertionError, match="loop is unsupported"):
-        HotCue.from_bytes(b"dummy", HotCueType.LOOP)
+def test_loop_from_bytes_roundtrip():
+    original = HotCue(name="loop_test", type=HotCueType.LOOP, start=12345, end=34567, index=3, color=SeratoColor.RED)
+    bytes_data = original.to_v2_bytes()
+    fp = BytesIO(bytes_data)
+    entry_name = _get_entry_name(fp)
+    assert entry_name == "LOOP"
+    struct_length = struct.unpack(">I", fp.read(4))[0]
+    assert struct_length > 0  # normally this should not happen
+    entry_data = fp.read(struct_length)
+    parsed = HotCue.from_bytes(entry_data, HotCueType.LOOP)
+    assert parsed.name == original.name
+    assert parsed.index == original.index
+    assert parsed.start == original.start
+    assert parsed.end == original.end
+    assert parsed.color == original.color
