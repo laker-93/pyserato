@@ -69,8 +69,7 @@ class V2Mp3Encoder(BaseEncoder):
                 case "CUE":
                     yield HotCue.from_bytes(entry_data, hotcue_type=HotCueType.CUE)
                 case "LOOP":
-                    # not yet implemented
-                    continue
+                    yield HotCue.from_bytes(entry_data, hotcue_type=HotCueType.LOOP)
                 case "BPMLOCK":
                     # not yet implemented
                     continue
@@ -117,6 +116,8 @@ class V2Mp3Encoder(BaseEncoder):
         payload = b""
         for cue in track.hot_cues:
             payload += cue.to_v2_bytes()
+        for loop in track.cue_loops:
+            payload += loop.to_v2_bytes()
         return self._pad(payload)
 
     def _pad(self, payload: bytes, entries_count: int | None = None):
