@@ -6,9 +6,11 @@ from typing import Optional
 from pyserato.model.serato_color import SeratoColor
 from pyserato.model.hot_cue_type import HotCueType
 
+
 def write_null_terminated_string(s: str) -> bytearray:
     """Encode string as UTF-8 with a null terminator."""
     return bytearray(s.encode("utf-8") + b"\x00")
+
 
 def concat_bytearrays(arrays: list[bytearray]) -> bytearray:
     result = bytearray()
@@ -16,11 +18,13 @@ def concat_bytearrays(arrays: list[bytearray]) -> bytearray:
         result.extend(arr)
     return result
 
+
 def encode_element(name: str, data: bytes) -> bytearray:
     """Encode element with name, 4-byte big-endian length, and data."""
     name_bytes = write_null_terminated_string(name)
     length_bytes = struct.pack(">I", len(data))  # big-endian uint32
     return concat_bytearrays([name_bytes, bytearray(length_bytes), bytearray(data)])
+
 
 @dataclass
 class HotCue:
@@ -38,7 +42,7 @@ class HotCue:
             index=str(f"{self.index}").rjust(2),
             start=str(f"{self.start}ms").ljust(10),
             end=str(f" | End: {self.end}ms").ljust(10) if self.end is not None else "",
-            color=self.color.name
+            color=self.color.name,
         )
 
     # def apply_offset(self):
@@ -88,7 +92,7 @@ class HotCue:
         buf[0x1] = self.index
 
         struct.pack_into(">I", buf, 0x02, self.start)  # big-endian uint32
-        struct.pack_into(">I", buf, 0x06, self.end)    # big-endian uint32
+        struct.pack_into(">I", buf, 0x06, self.end)  # big-endian uint32
 
         buf[0x0E] = 0
         buf[0x0F] = 0
@@ -97,7 +101,7 @@ class HotCue:
         buf[0x13] = 1
 
         # append name string
-        buf[0x14:0x14+len(name_bytes)] = name_bytes
+        buf[0x14: 0x14 + len(name_bytes)] = name_bytes
 
         return bytes(encode_element("LOOP", buf))
 
@@ -156,7 +160,7 @@ class HotCue:
             _ = fp.read(2)  # bytes 0x0E, 0x0F (color?)
             _ = fp.read(2)  # bytes 0x10, 0x11 (color?)
             _ = fp.read(1)  # byte 0x12 (padding 0)
-            _locked = struct.unpack(">B", fp.read(1))[0]  # byte 0x13 (locked = 1)
+            is_locked = struct.unpack(">B", fp.read(1))[0]  # byte 0x13 (locked = 1)
 
             # read the null-terminated name string
             name = fp.read().partition(b"\x00")[0].decode("utf-8")
@@ -167,4 +171,5 @@ class HotCue:
                 start=start,
                 end=end,
                 index=index,
+                is_locked=is_locked
             )

@@ -1,7 +1,6 @@
 import struct
 from io import BytesIO
 
-import pytest
 from pyserato.model.hot_cue import HotCue
 from pyserato.model.serato_color import SeratoColor
 from pyserato.model.hot_cue_type import HotCueType
@@ -43,6 +42,7 @@ def test_cue_from_bytes_roundtrip():
     assert parsed.index == original.index
     assert parsed.start == original.start
     assert parsed.color == original.color
+
 
 def test_loop_from_bytes_roundtrip():
     original = HotCue(name="loop_test", type=HotCueType.LOOP, start=12345, end=34567, index=3, color=SeratoColor.RED)

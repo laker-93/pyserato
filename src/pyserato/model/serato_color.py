@@ -6,6 +6,7 @@ class SeratoColor(str, Enum):
     https://github.com/Holzhaus/serato-tags/blob/main/docs/colors.md#serato-dj-pro
     For Serato DJ Pro, saved and displayed colors are different. This map is the saved colors.
     """
+
     RED = "CC0000"
     ORANGE = "CC4400"
     AMBER = "CC8800"
