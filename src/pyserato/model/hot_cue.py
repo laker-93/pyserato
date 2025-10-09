@@ -101,7 +101,7 @@ class HotCue:
         buf[0x13] = 1
 
         # append name string
-        buf[0x14: 0x14 + len(name_bytes)] = name_bytes
+        buf[0x14 : 0x14 + len(name_bytes)] = name_bytes
 
         return bytes(encode_element("LOOP", buf))
 
@@ -138,12 +138,12 @@ class HotCue:
                 struct.unpack(">3s", fp.read(3))[0],  # COLOR
                 struct.unpack(">B", fp.read(1))[0],  # NULL separator
                 struct.unpack(">?", fp.read(1))[0],  # LOCKED
-                fp.read().partition(b"\x00")[0],  # NAME + ending NULL separator
+                fp.read().partition(b"\x00")[0].decode("utf-8"),  # NAME + ending NULL separator
             )
             index, start, end, _1, color, _2, locked, name = result
             color = SeratoColor(color.hex().upper())
             hot_cue = HotCue(
-                name=name.decode("utf-8"),
+                name=name,
                 type=HotCueType.CUE,
                 color=color,
                 start=start,
@@ -165,11 +165,6 @@ class HotCue:
             # read the null-terminated name string
             name = fp.read().partition(b"\x00")[0].decode("utf-8")
 
-            return HotCue(
-                name=name,
-                type=HotCueType.LOOP,
-                start=start,
-                end=end,
-                index=index,
-                is_locked=is_locked
-            )
+            return HotCue(name=name, type=HotCueType.LOOP, start=start, end=end, index=index, is_locked=is_locked)
+        else:
+            raise ValueError(f"unknown type {hotcue_type}")
