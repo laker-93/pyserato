@@ -7,6 +7,25 @@ from pyserato.model.serato_color import SeratoColor
 from pyserato.model.hot_cue_type import HotCueType
 
 
+def write_null_terminated_string(s: str) -> bytearray:
+    """Encode string as UTF-8 with a null terminator."""
+    return bytearray(s.encode("utf-8") + b"\x00")
+
+
+def concat_bytearrays(arrays: list[bytearray]) -> bytearray:
+    result = bytearray()
+    for arr in arrays:
+        result.extend(arr)
+    return result
+
+
+def encode_element(name: str, data: bytes) -> bytearray:
+    """Encode element with name, 4-byte big-endian length, and data."""
+    name_bytes = write_null_terminated_string(name)
+    length_bytes = struct.pack(">I", len(data))  # big-endian uint32
+    return concat_bytearrays([name_bytes, bytearray(length_bytes), bytearray(data)])
+
+
 @dataclass
 class HotCue:
     name: str
@@ -23,7 +42,7 @@ class HotCue:
             index=str(f"{self.index}").rjust(2),
             start=str(f"{self.start}ms").ljust(10),
             end=str(f" | End: {self.end}ms").ljust(10) if self.end is not None else "",
-            color=self.color.name
+            color=self.color.name,
         )
 
     # def apply_offset(self):
@@ -46,9 +65,9 @@ class HotCue:
     #             self.end = old_end
     #             raise self._value_error("End time", self.end, old_end)
 
-    @staticmethod
-    def _value_error(offset_name: str, new_pos: int, old_pos: int) -> ValueError:
-        return ValueError(f"{offset_name} cannot go below 0. New position: {new_pos}, old position: {old_pos}")
+    # @staticmethod
+    # def _value_error(offset_name: str, new_pos: int, old_pos: int) -> ValueError:
+    #     return ValueError(f"{offset_name} cannot go below 0. New position: {new_pos}, old position: {old_pos}")
 
     def to_v2_bytes(self) -> bytes:
         if self.type == HotCueType.CUE:
@@ -65,22 +84,26 @@ class HotCue:
         :param entry_data:
         :return:
         """
-        data = b"".join(
-            (
-                struct.pack(">B", 0),
-                struct.pack(">B", self.index),
-                struct.pack(">I", self.start),
-                struct.pack(">I", self.end),
-                b"\xff\xff\xff\xff\x00",  # don't know what this is exactly
-                struct.pack(">3s", b"\xaa\xe1"),  # color
-                struct.pack(">B", 0),
-                struct.pack(">?", False),  # is_locked
-                self.name.encode("utf-8"),
-                struct.pack(">B", 0),
-            )
-        )
+        name_bytes = write_null_terminated_string(self.name)
+        buf = bytearray(0x14 + len(name_bytes))
 
-        return b"".join([b"LOOP", b"\x00", struct.pack(">I", len(data)), data])
+        # flags / header fields
+        buf[0x0] = 0x00
+        buf[0x1] = self.index
+
+        struct.pack_into(">I", buf, 0x02, self.start)  # big-endian uint32
+        struct.pack_into(">I", buf, 0x06, self.end)  # big-endian uint32
+
+        buf[0x0E] = 0
+        buf[0x0F] = 0
+        buf[0x10] = 255
+        buf[0x11] = 255
+        buf[0x13] = 1
+
+        # append name string
+        buf[0x14 : 0x14 + len(name_bytes)] = name_bytes
+
+        return bytes(encode_element("LOOP", buf))
 
     def _cue_to_v2_bytes(self) -> bytes:
         """
@@ -100,32 +123,48 @@ class HotCue:
                 struct.pack(">B", 0),
             )
         )
-        payload = b"".join([b"CUE", b"\x00", struct.pack(">I", len(data)), data])
-        return payload
+        return bytes(encode_element("CUE", data))
 
     @staticmethod
     def from_bytes(data: bytes, hotcue_type: HotCueType) -> "HotCue":
-        assert hotcue_type == HotCueType.CUE, "loop is unsupported. TODO implement"
         fp = BytesIO(data)
         fp.seek(1)  # first byte is NULL as it's a separator
+        if hotcue_type is HotCueType.CUE:
+            result = (
+                struct.unpack(">B", fp.read(1))[0],  # INDEX
+                struct.unpack(">I", fp.read(4))[0],  # POSITION START
+                struct.unpack(">B", fp.read(1))[0],  # NULL separator (aka POSITION END)
+                None,  # aka. some field containing (4294967295, 39)
+                struct.unpack(">3s", fp.read(3))[0],  # COLOR
+                struct.unpack(">B", fp.read(1))[0],  # NULL separator
+                struct.unpack(">?", fp.read(1))[0],  # LOCKED
+                fp.read().partition(b"\x00")[0].decode("utf-8"),  # NAME + ending NULL separator
+            )
+            index, start, end, _1, color, _2, locked, name = result
+            color = SeratoColor(color.hex().upper())
+            hot_cue = HotCue(
+                name=name,
+                type=HotCueType.CUE,
+                color=color,
+                start=start,
+                index=index,
+            )
+            return hot_cue
+        elif hotcue_type is HotCueType.LOOP:
+            index = struct.unpack(">B", fp.read(1))[0]
+            start = struct.unpack(">I", fp.read(4))[0]
+            end = struct.unpack(">I", fp.read(4))[0]
 
-        result = (
-            struct.unpack(">B", fp.read(1))[0],  # INDEX
-            struct.unpack(">I", fp.read(4))[0],  # POSITION START
-            struct.unpack(">B", fp.read(1))[0],  # NULL separator (aka POSITION END)
-            None,  # aka. some field containing (4294967295, 39)
-            struct.unpack(">3s", fp.read(3))[0],  # COLOR
-            struct.unpack(">B", fp.read(1))[0],  # NULL separator
-            struct.unpack(">?", fp.read(1))[0],  # LOCKED
-            fp.read().partition(b"\x00")[0],  # NAME + ending NULL separator
-        )
-        index, start, end, _1, color, _2, locked, name = result
-        color = SeratoColor(color.hex().upper())
-        hot_cue = HotCue(
-            name=name.decode("utf-8"),
-            type=HotCueType.CUE,
-            color=color,
-            start=start,
-            index=index,
-        )
-        return hot_cue
+            # skip bytes 0x0E–0x13 (fixed flags and color placeholders)
+            fp.seek(0x0E, 0)  # move to offset 0x0E in stream
+            _ = fp.read(2)  # bytes 0x0E, 0x0F (color?)
+            _ = fp.read(2)  # bytes 0x10, 0x11 (color?)
+            _ = fp.read(1)  # byte 0x12 (padding 0)
+            is_locked = struct.unpack(">B", fp.read(1))[0]  # byte 0x13 (locked = 1)
+
+            # read the null-terminated name string
+            name = fp.read().partition(b"\x00")[0].decode("utf-8")
+
+            return HotCue(name=name, type=HotCueType.LOOP, start=start, end=end, index=index, is_locked=is_locked)
+        else:
+            raise ValueError(f"unknown type {hotcue_type}")

@@ -93,6 +93,10 @@ track.add_hot_cue(HotCue(name='cue1', type=HotCueType.CUE, start=50, index=1))
 track.add_hot_cue(HotCue(name='loop1', type=HotCueType.LOOP, start=50, end=52, index=1))
 builder.save(crate)
 ```
+
+
+See examples/ for more including how to read cues and loops.
+
 ## Serato Database Format
 
 See https://github.com/Holzhaus/serato-tags/
