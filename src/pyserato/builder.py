@@ -85,20 +85,20 @@ class Builder:
             otrk_idx = crate_content.find("otrk".encode("utf-8"))
             if otrk_idx < 0:
                 break
-            assert "otrk".encode("utf-8") == crate_content[otrk_idx : otrk_idx + len("otrk")]
+            assert "otrk".encode("utf-8") == crate_content[otrk_idx: otrk_idx + len("otrk")]
             ptrk_idx = crate_content.find("ptrk".encode("utf-8"))
             # Below would be the lgnth of the otrk data if needed for further parsing.
             # otrk_section = crate_content[otrk_idx + len("otrk"): ptrk_idx]
             # len_data = int.from_bytes(otrk_section, "big") - 8
             ptrk_section = crate_content[ptrk_idx:]
             track_name_length = int.from_bytes(ptrk_section[4:8], "big")
-            track_name_encoded = ptrk_section[8 : 8 + track_name_length]
+            track_name_encoded = ptrk_section[8: 8 + track_name_length]
             file_path = serato_decode(track_name_encoded)
             if not file_path.startswith("/"):
                 file_path = "/" + file_path
 
             yield Path(file_path)
-            crate_content = crate_content[ptrk_idx + 8 + track_name_length :]
+            crate_content = crate_content[ptrk_idx + 8 + track_name_length:]
 
     def _construct(self, crate: Crate) -> bytes:
         """
