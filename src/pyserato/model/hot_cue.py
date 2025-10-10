@@ -101,7 +101,7 @@ class HotCue:
         buf[0x13] = 1
 
         # append name string
-        buf[0x14 : 0x14 + len(name_bytes)] = name_bytes
+        buf[0x14: 0x14 + len(name_bytes)] = name_bytes
 
         return bytes(encode_element("LOOP", buf))
 
