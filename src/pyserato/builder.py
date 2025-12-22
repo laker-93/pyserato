@@ -28,7 +28,7 @@ class Builder:
             path += f"{crate.name}%%"
             children = crate.children
             if children:
-                for child in children:
+                for child in children.values():
                     crates.append((child, path))
             yield crate, path.rstrip("%%") + ".crate"
 
@@ -44,39 +44,45 @@ class Builder:
             yield crate, subcrate_folder / paths
 
     def parse_crates_from_root_path(self, subcrate_path: Path) -> dict[str, Crate]:
-        crate_name_to_crate: dict[str, Crate] = {}
+        # map from top level crate name to crate
+        top_level_crate_map: dict[str, Crate] = {}
         for f in subcrate_path.iterdir():
             if not f.name.endswith("crate"):
                 continue
-            crate = self._build_crates_from_filepath(f)
-            if crate.name in crate_name_to_crate:
-                crate += crate_name_to_crate[crate.name]
-                crate_name_to_crate[crate.name] = crate
-            else:
-                crate_name_to_crate[crate.name] = crate
-        return crate_name_to_crate
+            crate = self._build_crates_from_filepath(f, top_level_crate_map)
+            if crate.name not in top_level_crate_map:
+                top_level_crate_map[crate.name] = crate
+        return top_level_crate_map
 
-    def _build_crates_from_filepath(self, filepath: Path) -> Crate:
-        """
-        Builds the crate tree from an existing file path.
-        :param filepath:
-        :return:
-        """
+    def _build_crates_from_filepath(
+            self,
+            filepath: Path,
+            top_level_crate_map: dict[str, Crate],
+    ) -> Crate:
         crate_names = list(self._parse_crate_names(filepath))
-        child_crate = None
-        crate = None
-        for crate_name in reversed(crate_names):
-            if child_crate is None:
-                crate = Crate(crate_name)
-                for file_path in self._parse_crate_tracks(filepath):
-                    track = Track.from_path(file_path)
-                    crate.add_track(track)
-                child_crate = crate
-            else:
-                crate = Crate(crate_name, children=[child_crate])
-                child_crate = crate
-        assert crate, f"no crates parsed from {filepath}"
-        return crate
+        if not crate_names:
+            raise ValueError(f"No crates parsed from {filepath}")
+
+        tracks = [
+            Track.from_path(p)
+            for p in self._parse_crate_tracks(filepath)
+        ]
+
+        root = top_level_crate_map.get(crate_names[0])
+        if root is None:
+            root = Crate(crate_names[0])
+        current = root
+        for crate_name in crate_names[1:]:
+            next_crate = current.children.get(crate_name)
+            if next_crate is None:
+                next_crate = Crate(crate_name)
+                current.children[crate_name] = next_crate
+            current = next_crate
+
+        for track in tracks:
+            current.add_track(track)
+
+        return root
 
     @staticmethod
     def _parse_crate_tracks(filepath: Path) -> Iterator[Path]:
