@@ -18,9 +18,11 @@ def make_crates():
     lvl2_1.add_track(Track.from_path("/Users/lukepurnell/test music/Russian Circles - Gnosis/Russian Circles - Gnosis - 06 Betrayal.mp3"))
     lvl2_2 = Crate('lvl2_2')
     lvl2_2.add_track(Track.from_path("/Users/lukepurnell/test music/Laker - Noise From The Ruliad/Laker - Noise From The Ruliad - 01 Escape.mp3"))
-    lvl1_1 = Crate('lvl1_1', children=[lvl2_1, lvl2_2])
+    children = [lvl2_1, lvl2_2]
+    lvl1_1 = Crate('lvl1_1', children=dict(zip(map(lambda c: c.name, children), children)))
     lvl1_1.add_track(Track.from_path("/Users/lukepurnell/test music/Laker - Noise From The Ruliad/Laker - Noise From The Ruliad - 02 Points Break At Break Points.mp3"))
-    root_crate = Crate('rootpyserato', children=[lvl1_1])
+    children = [lvl1_1]
+    root_crate = Crate('rootpyserato', children=dict(zip(map(lambda c: c.name, children), children)))
     builder.save(root_crate)
 
 

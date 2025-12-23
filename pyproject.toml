@@ -2,7 +2,7 @@
 name = "pyserato"
 description = "PySerato API."
 readme = "README.md"
-version = '0.2.0'
+version = '0.2.1'
 authors = [
     { name = "Luke Purnell", email = "luke.a.purnell@gmail.com" }
 ]

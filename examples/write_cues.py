@@ -55,7 +55,7 @@ def write_tags():
 
 if __name__ == '__main__':
     #write_tags2()
-    #clear_tags()
-    write_tags()
+    clear_tags()
+    #write_tags()
     #get_geob_tabs()
-    read_tags()
+    #read_tags()

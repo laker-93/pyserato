@@ -1,5 +1,3 @@
-from copy import deepcopy
-from itertools import zip_longest
 from typing import Optional
 from typing_extensions import Self
 
@@ -8,13 +6,13 @@ from pyserato.util import sanitize_filename, DuplicateTrackError
 
 
 class Crate:
-    def __init__(self, name: str, children: Optional[list[Self]] = None):
-        self._children = children if children else []
+    def __init__(self, name: str, children: Optional[dict[str, Self]] = None):
+        self._children = children if children else {}
         self.name = sanitize_filename(name)
         self._tracks: set[Track] = set()
 
     @property
-    def children(self) -> list[Self]:
+    def children(self) -> dict[str, Self]:
         return self._children
 
     @property
@@ -35,37 +33,13 @@ class Crate:
     def __repr__(self):
         return f"Crate<{self.name}>"
 
-    def __add__(self, other) -> "Crate":
-        assert self.name == other.name
-        children = self._children + other._children
-        children_copy = []
-        for child in children:
-            children_copy.append(deepcopy(child))
-        new = Crate(self.name, children=children_copy)
-        all_tracks = self._tracks | other._tracks
-        for track in all_tracks:
-            new.add_track(track)
-        return new
-
-    def __deepcopy__(self, memodict={}) -> "Crate":
-        children_copy = []
-        for child in self.children:
-            children_copy.append(deepcopy(child))
-        copy = Crate(self.name, children=children_copy)
-        memodict[id(self)] = copy
-        for track in self._tracks:
-            copy.add_track(track)
-        return copy
-
     def __eq__(self, other):
-        result = self.name == other.name and self._tracks == other._tracks
-        if self._children:
-            # sort so order is deterministic
-            children = sorted(self._children, key=lambda c: len(c.tracks))
-            other_children = sorted(other._children, key=lambda c: len(c.tracks))
-            for child, other_child in zip_longest(children, other_children):
-                if child and other_child:
-                    result &= child == other_child
-                else:
-                    result = False
-        return result
+        "comparison for two root crates"
+        if self.name != other.name:
+            return False
+        if self.children.keys() != other.children.keys():
+            return False
+        for child_name in self.children:
+            if self.children[child_name] != other.children[child_name]:
+                return False
+        return True
