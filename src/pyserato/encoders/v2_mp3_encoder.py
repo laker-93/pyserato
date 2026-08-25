@@ -38,7 +38,13 @@ class V2Mp3Encoder(BaseEncoder):
 
     def read_cues(self, track: Track) -> List[HotCue]:
         tags = MP3(track.path)
-        tag_data = tags[self.tag_name]
+        tag_data = tags.get(self.tag_name)
+        if tag_data is None:
+            # Track has never been analysed by Serato, so it has no
+            # "Serato Markers2" frame at all. This is distinct from a track
+            # that *has* the frame but legitimately has no cues, and should
+            # not raise -- callers just get an empty cue list either way.
+            return []
         data = tag_data.data
         return list(self._decode(data))
 
