@@ -98,12 +98,12 @@ class HotCue:
         buf[0x0F] = 0
         buf[0x10] = 255
         buf[0x11] = 255
-        buf[0x13] = 1
+        buf[0x13] = int(bool(self.is_locked))
 
         # append name string
         buf[0x14: 0x14 + len(name_bytes)] = name_bytes
 
-        return bytes(encode_element("LOOP", buf))
+        return bytes(encode_element("LOOP", bytes(buf)))
 
     def _cue_to_v2_bytes(self) -> bytes:
         """
@@ -118,7 +118,7 @@ class HotCue:
                 struct.pack(">B", 0),
                 struct.pack(">3s", bytes.fromhex(self.color.value)),
                 struct.pack(">B", 0),
-                struct.pack(">?", b"\x00"),
+                struct.pack(">?", bool(self.is_locked)),
                 self.name.encode("utf-8"),
                 struct.pack(">B", 0),
             )
@@ -148,6 +148,7 @@ class HotCue:
                 color=color,
                 start=start,
                 index=index,
+                is_locked=locked,
             )
             return hot_cue
         elif hotcue_type is HotCueType.LOOP:
