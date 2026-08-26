@@ -112,4 +112,7 @@ def test_loop_is_locked_survives_a_roundtrip():
     for is_locked in (False, True):
         original = HotCue(name="l", type=HotCueType.LOOP, start=99, end=200, index=1, is_locked=is_locked)
         parsed = HotCue.from_bytes(_payload(original), HotCueType.LOOP)
-        assert bool(parsed.is_locked) == is_locked
+        # `is`, not `==`: the loop decoder used to hand back the raw 0/1 byte,
+        # so an int would satisfy `== is_locked` while still being the wrong
+        # type on the way back out. Both decoders now yield a bool.
+        assert parsed.is_locked is is_locked

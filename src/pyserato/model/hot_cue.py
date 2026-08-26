@@ -161,7 +161,7 @@ class HotCue:
             _ = fp.read(2)  # bytes 0x0E, 0x0F (color?)
             _ = fp.read(2)  # bytes 0x10, 0x11 (color?)
             _ = fp.read(1)  # byte 0x12 (padding 0)
-            is_locked = struct.unpack(">B", fp.read(1))[0]  # byte 0x13 (locked = 1)
+            is_locked = bool(struct.unpack(">B", fp.read(1))[0])  # byte 0x13 (locked = 1)
 
             # read the null-terminated name string
             name = fp.read().partition(b"\x00")[0].decode("utf-8")
