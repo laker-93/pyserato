@@ -5,20 +5,30 @@ Serato itself wrote into a real analysed file. That is the only assertion here
 that proves the format was read correctly rather than merely read consistently,
 so it comes first and is worth keeping even though it looks trivial.
 
-The file-level tests need a real analysed MP3 and skip without one. They point
-at ~/Music/SubboxSeratoQA, which holds copies made for exactly this -- never at
-~/Music/_Serato_, and never at the fixtures in place: every write here happens
-on a copy in a tmp_path.
+The file-level tests run on a synthesized MP3 -- a handful of silent MPEG-1
+Layer III frames, carrying the six GEOB frames Serato leaves on an analysed
+track -- so they run on CI, where no Serato library exists. The two that need
+Serato's own bytes rather than a plausible imitation still point at
+~/Music/SubboxSeratoQA, which holds copies made for exactly this, and skip
+without it -- never at ~/Music/_Serato_, and never at the fixtures in place:
+every write here happens on a copy in a tmp_path.
 """
 import shutil
 import struct
 from pathlib import Path
 
 import pytest
+from mutagen import id3
 from mutagen.mp3 import MP3
 
 from pyserato.encoders.beatgrid_mp3_encoder import BeatgridMp3Encoder
-from pyserato.encoders.serato_tags import SERATO_BEATGRID
+from pyserato.encoders.serato_tags import (
+    SERATO_ANALYSIS,
+    SERATO_BEATGRID,
+    SERATO_MARKERS_V1,
+    SERATO_MARKERS_V2,
+    SERATO_OVERVIEW,
+)
 from pyserato.model.tempo import Tempo
 from pyserato.model.track import Track
 
@@ -31,6 +41,26 @@ FIXTURES = Path("~/Music/SubboxSeratoQA").expanduser()
 needs_fixtures = pytest.mark.skipif(
     not FIXTURES.is_dir(), reason="needs the analysed fixture library"
 )
+# What `needs_fixtures` guards cannot run on CI by design, so it is marked
+# `no cover` as well -- otherwise its skipped body counts as untested code and
+# drags the run's coverage under the floor on every machine but this one.
+
+
+# One MPEG-1 Layer III frame: 128kbps, 44100Hz, no padding, silent payload.
+# Enough for mutagen to find a sync word and treat the file as an MP3, which is
+# all these tests need of the audio.
+_MPEG_FRAME = b"\xff\xfb\x90\x00" + b"\x00" * 413
+
+# The frames Serato leaves on an analysed track, with stand-in payloads. Only
+# their presence and their bytes staying untouched matter here; the sibling
+# encoders own their contents.
+_SIBLING_FRAMES = {
+    SERATO_ANALYSIS: b"\x02\x01",
+    "GEOB:Serato Autotags": b"\x01\x01175.00\x00",
+    SERATO_OVERVIEW: b"\x01\x05" + bytes(range(16)),
+    SERATO_MARKERS_V1: b"\x02\x05" + b"\x00" * 8,
+    SERATO_MARKERS_V2: b"\x01\x01" + b"QVVUT1I=",
+}
 
 
 @pytest.fixture
@@ -38,7 +68,31 @@ def encoder():
     return BeatgridMp3Encoder()
 
 
-def _gridded_fixture():
+@pytest.fixture
+def analysed_mp3(tmp_path):
+    """A synthetic stand-in for a Serato-analysed track: silent audio, six GEOB
+    frames, a real one-marker grid among them."""
+    path = tmp_path / "synthetic.mp3"
+    path.write_bytes(_MPEG_FRAME * 20)
+    tags = MP3(path)
+    for name, data in _SIBLING_FRAMES.items():
+        tags[name] = id3.GEOB(
+            encoding=0,
+            mime="application/octet-stream",
+            desc=name.split(":", 1)[1],
+            data=data,
+        )
+    tags[SERATO_BEATGRID] = id3.GEOB(
+        encoding=0,
+        mime="application/octet-stream",
+        desc="Serato BeatGrid",
+        data=ZENITH,
+    )
+    tags.save()
+    return path
+
+
+def _gridded_fixture():  # pragma: no cover -- QA machine only
     """An analysed fixture that actually carries a grid, or None."""
     for path in sorted(FIXTURES.rglob("*.mp3")):
         tag = MP3(path).get(SERATO_BEATGRID)
@@ -133,39 +187,41 @@ def test_bpm_between_derives_the_tempo_serato_infers(encoder):
         encoder.bpm_between(second, second)
     with pytest.raises(ValueError, match="strictly increasing"):
         encoder.bpm_between(first, Tempo(position=0.5, bpm=140.0))
+    with pytest.raises(ValueError, match="must have a position"):
+        encoder.bpm_between(first, Tempo(bpm=140.0))
 
 
-@needs_fixtures
-def test_reading_a_track_with_no_frame_gives_an_empty_grid(encoder, tmp_path):
-    source = next(iter(sorted(FIXTURES.rglob("*.mp3"))), None)
-    if source is None:
-        pytest.skip("no fixture mp3s")
-    copy = tmp_path / source.name
-    shutil.copy(source, copy)
-    tags = MP3(copy)
+def test_reading_a_track_with_no_frame_gives_an_empty_grid(encoder, analysed_mp3):
+    tags = MP3(analysed_mp3)
     tags.pop(SERATO_BEATGRID, None)
     tags.save()
 
-    assert encoder.read_beatgrid(Track(path=copy)) == []
+    assert encoder.read_beatgrid(Track(path=analysed_mp3)) == []
 
 
-@needs_fixtures
 def test_reading_an_unreadable_frame_gives_an_empty_grid_rather_than_raising(
-    encoder, tmp_path
+    encoder, analysed_mp3
 ):
-    source = next(iter(sorted(FIXTURES.rglob("*.mp3"))), None)
-    if source is None:
-        pytest.skip("no fixture mp3s")
-    copy = tmp_path / source.name
-    shutil.copy(source, copy)
-    track = Track(path=copy)
+    track = Track(path=analysed_mp3)
     encoder._write(track, b"\x09\x09nonsense").save()
 
     assert encoder.read_beatgrid(track) == []
 
 
+def test_a_written_grid_reads_back_off_disk(encoder, analysed_mp3):
+    track = Track(path=analysed_mp3)
+    track.add_beatgrid_marker(Tempo(position=0.5, beats_till_next=16))
+    track.add_beatgrid_marker(Tempo(position=8.0, bpm=128.0))
+    encoder.write(track)
+
+    first, second = encoder.read_beatgrid(track)
+    assert first.beats_till_next == 16
+    assert first.position == pytest.approx(0.5)
+    assert second.terminal and second.bpm == pytest.approx(128.0)
+
+
 @needs_fixtures
-def test_a_real_analysed_files_grid_reads_back(encoder):
+def test_a_real_analysed_files_grid_reads_back(encoder):  # pragma: no cover
     source = _gridded_fixture()
     if source is None:
         pytest.skip("no gridded fixture")
@@ -175,17 +231,29 @@ def test_a_real_analysed_files_grid_reads_back(encoder):
     assert all(m.position is not None for m in grid)
 
 
-@needs_fixtures
-def test_writing_a_grid_leaves_every_sibling_geob_frame_alone(encoder, tmp_path):
+def test_writing_a_grid_leaves_every_sibling_geob_frame_alone(encoder, analysed_mp3):
     # The damage that cannot be undone: Analysis, Autotags, Overview, Markers_
     # and Markers2 are minutes of analysis plus any manual gridding, and
     # assigning the whole GEOB array takes all of them (laker-93/pyserato#9).
+    _assert_only_the_grid_frame_changed(encoder, analysed_mp3)
+
+
+@needs_fixtures
+def test_a_real_analysed_file_keeps_its_sibling_frames_too(  # pragma: no cover
+    encoder, tmp_path
+):
+    # The same assertion against Serato's own six frames rather than our
+    # stand-ins, in case a real payload trips something the synthetic one does
+    # not. Skips off the QA machine.
     source = _gridded_fixture() or next(iter(sorted(FIXTURES.rglob("*.mp3"))), None)
     if source is None:
         pytest.skip("no fixture mp3s")
     copy = tmp_path / source.name
     shutil.copy(source, copy)
+    _assert_only_the_grid_frame_changed(encoder, copy)
 
+
+def _assert_only_the_grid_frame_changed(encoder, copy):
     before = {k: v.data for k, v in MP3(copy).items() if k.startswith("GEOB:")}
     assert len(before) > 1, "fixture must carry sibling frames for this to mean anything"
 

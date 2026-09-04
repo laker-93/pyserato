@@ -154,6 +154,8 @@ class BeatgridMp3Encoder(BaseEncoder):
         """
         if first.beats_till_next is None:
             raise ValueError("the terminal marker's bpm is stored, not derived")
+        if first.position is None or second.position is None:
+            raise ValueError("both beatgrid markers must have a position")
         span = second.position - first.position
         if span <= 0:
             raise ValueError("beatgrid markers must be strictly increasing in time")
