@@ -270,3 +270,57 @@ def _assert_only_the_grid_frame_changed(encoder, copy):
     (marker,) = encoder.read_beatgrid(track)
     assert marker.bpm == 128.0
     assert marker.position == pytest.approx(1.25, abs=1e-5)
+
+
+@needs_fixtures
+def test_an_unfamiliar_footer_byte_is_carried_not_replaced(tmp_path):  # pragma: no cover
+    """The one byte in the frame nobody can interpret.
+
+    The most complete public description of the format calls it "apparently
+    random" (Holzhaus/serato-tags), so it is exactly the kind of field that must
+    be copied rather than set: writing a guess over it would be the same mistake
+    as replacing the sibling GEOB frames we cannot regenerate.
+
+    Every file observed carries 0x00, so this uses a value that is deliberately
+    not that -- otherwise the test would pass on an encoder that ignores the
+    footer entirely.
+    """
+    source = _gridded_fixture() or next(iter(sorted(FIXTURES.rglob("*.mp3"))), None)
+    if source is None:
+        pytest.skip("no fixture mp3s")
+    path = tmp_path / "footer.mp3"
+    shutil.copyfile(source, path)
+    encoder = BeatgridMp3Encoder()
+
+    track = Track(str(path))
+    track.beatgrid = [Tempo(position=0.5, bpm=128.0)]
+    tagged = encoder._write(track, encoder._encode(track.beatgrid, footer=b"\x2a"))
+    tagged.save()
+
+    assert encoder.read_footer(track) == b"\x2a"
+
+    # A second write, of a different grid, must keep it.
+    track.beatgrid = [Tempo(position=0.25, beats_till_next=4), Tempo(position=2.25, bpm=120.0)]
+    encoder.write(track)
+
+    assert encoder.read_footer(track) == b"\x2a", "the footer must survive a rewrite"
+    assert len(encoder.read_beatgrid(track)) == 2
+
+
+@needs_fixtures
+def test_a_file_with_no_frame_yet_gets_the_observed_default(tmp_path):  # pragma: no cover
+    source = next(iter(sorted(FIXTURES.rglob("*.mp3"))), None)
+    if source is None:
+        pytest.skip("no fixture mp3s")
+    path = tmp_path / "fresh.mp3"
+    shutil.copyfile(source, path)
+    encoder = BeatgridMp3Encoder()
+    tags = MP3(path)
+    tags.pop(SERATO_BEATGRID, None)
+    tags.save()
+
+    track = Track(str(path))
+    track.beatgrid = [Tempo(position=0.5, bpm=128.0)]
+    encoder.write(track)
+
+    assert encoder.read_footer(track) == b"\x00"

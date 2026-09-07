@@ -13,9 +13,16 @@ from pyserato.model.track import Track
 
 logger = logging.getLogger(__name__)
 
-# The byte after the markers. Serato writes one; what it means is not known, and
-# every analysed file observed carries exactly one, so it is preserved on read
-# and reproduced on write rather than guessed at.
+# The byte after the markers. Nobody knows what it is for: the most complete
+# public description of the format calls it "apparently random"
+# (Holzhaus/serato-tags, docs/serato_beatgrid.md), and it is the one field here
+# that is neither structure nor data we can interpret.
+#
+# Every file observed carries 0x00 -- 34 Serato-authored files on the QA
+# machine, gridded and ungridded alike -- so this is what we write when there is
+# nothing to copy. When there *is* something to copy we copy it, because the
+# rule for a byte we cannot read is the same as the rule for the sibling GEOB
+# frames: do not overwrite what you cannot reproduce.
 _DEFAULT_FOOTER = b"\x00"
 
 
@@ -29,7 +36,16 @@ class BeatgridMp3Encoder(BaseEncoder):
         n_markers uint32be
         n-1 x     float32be position_s, uint32be beats_till_next
         1 x       float32be position_s, float32be bpm      # terminal marker
-        footer    1 byte
+        footer    1 byte                         # meaning unknown; copied, not set
+
+    This agrees field for field with the most complete public description of
+    the format (Holzhaus/serato-tags, docs/serato_beatgrid.md), which was
+    checked against it after the fact. Two things that write-up leaves open are
+    settled here empirically: the version bytes it records only as "?" are
+    (1, 0) on all 34 Serato-authored files on the QA machine, and the footer it
+    calls "apparently random" is 0x00 on all 34. Neither is relied on -- an
+    unfamiliar version reads as "no grid" rather than as a grid, and the footer
+    is copied from the file rather than assumed.
 
     Worked examples:
 
@@ -83,8 +99,27 @@ class BeatgridMp3Encoder(BaseEncoder):
             logger.warning("unreadable beatgrid on %s: %s", track.path, exc)
             return []
 
+    def read_footer(self, track: Track) -> bytes:
+        """The trailing byte of the track's existing beatgrid frame, if it has one.
+
+        Kept separate from read_beatgrid because it is not part of the grid --
+        it is a byte we carry rather than a byte we understand.
+        """
+        try:
+            tag_data = MP3(track.path).get(self.tag_name)
+        except Exception:
+            return _DEFAULT_FOOTER
+        if tag_data is None or len(tag_data.data) < 1:
+            return _DEFAULT_FOOTER
+        return bytes(tag_data.data)[-1:]
+
     def write(self, track: Track):
-        tagged_file = self._write(track, self._encode(track.beatgrid))
+        # The file being written is very often one Serato has analysed and left
+        # ungridded, which already has this frame and therefore already has a
+        # footer byte. Writing a grid into it must not silently replace that
+        # byte with a guess.
+        payload = self._encode(track.beatgrid, footer=self.read_footer(track))
+        tagged_file = self._write(track, payload)
         tagged_file.save()
 
     def _decode(self, data: bytes) -> List[Tempo]:
@@ -106,7 +141,7 @@ class BeatgridMp3Encoder(BaseEncoder):
                 grid.append(Tempo(position=position, beats_till_next=beats))
         return grid
 
-    def _encode(self, grid: List[Tempo]) -> bytes:
+    def _encode(self, grid: List[Tempo], footer: bytes = _DEFAULT_FOOTER) -> bytes:
         payload = self.tag_version + struct.pack(">I", len(grid))
         for i, tempo in enumerate(grid):
             if tempo.position is None:
@@ -127,7 +162,7 @@ class BeatgridMp3Encoder(BaseEncoder):
                         f"beats_till_next"
                     )
                 payload += struct.pack(">fI", tempo.position, tempo.beats_till_next)
-        return payload + _DEFAULT_FOOTER
+        return payload + (footer or _DEFAULT_FOOTER)
 
     def _write(self, track: Track, payload: bytes) -> MP3:
         mutagen_file = MP3(track.path)
