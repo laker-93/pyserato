@@ -74,18 +74,47 @@ subcrates_folder = DEFAULT_SERATO_FOLDER / "SubCrates"
 crates = builder.parse_crates_from_root_path(subcrates_folder)
 ```
 
+## File formats
+
+| Container | Cues & loops | Beat grids | Where the tag lives |
+|---|---|---|---|
+| MP3  | yes | yes | ID3v2 `GEOB` frame, keyed by description |
+| FLAC | yes | yes | Vorbis comment, base64'd envelope |
+| WAV, AIFF, M4A | not yet | not yet | [#16](https://github.com/laker-93/pyserato/issues/16) |
+
+The payload is the same in every container -- the same bytes describe the same
+cues -- so only retrieval differs, and that lives in `pyserato.encoders.io`.
+
+The container is decided by the file's **magic bytes**, not its extension. A DJ
+library is full of files whose extension lies, and dispatching on the extension
+sends those to the wrong reader, which answers "no cues" rather than failing.
+
+A container with no reader yet raises `UnsupportedContainerError`, naming it, so
+a caller can tell "not implemented" from "this file is broken":
+
+```python
+from pyserato.encoders.io import UnsupportedContainerError
+from pyserato.encoders.v2_encoder import V2Encoder
+from pyserato.model.track import Track
+
+try:
+    cues = V2Encoder().read_cues(Track.from_path('path/to/song.aiff'))
+except UnsupportedContainerError as e:
+    print(f'no reader for {e.container} yet')
+```
+
 ## Writing Cues & Loops
 
 ```python
-from pyserato.encoders.v2.v2_mp3_encoder import V2Mp3Encoder
+from pyserato.encoders.v2_encoder import V2Encoder
 from pyserato.builder import Builder
 from pyserato.model.track import Track
 from pyserato.model.crate import Crate
 from pyserato.model.hot_cue import HotCue
 from pyserato.model.hot_cue_type import HotCueType
 
-mp3_encoder = V2Mp3Encoder()
-builder = Builder(encoder=mp3_encoder)
+encoder = V2Encoder()
+builder = Builder(encoder=encoder)
 crate = Crate('foo')
 track = Track.from_path('path/to/song.mp3')
 crate.add_track(track)
