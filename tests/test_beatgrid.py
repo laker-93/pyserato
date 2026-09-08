@@ -21,7 +21,9 @@ import pytest
 from mutagen import id3
 from mutagen.mp3 import MP3
 
-from pyserato.encoders.beatgrid_mp3_encoder import BeatgridMp3Encoder
+from builders import MPEG_FRAME
+from pyserato.encoders.beatgrid_encoder import BeatgridEncoder
+from pyserato.encoders.io import tag_io_for
 from pyserato.encoders.serato_tags import (
     SERATO_ANALYSIS,
     SERATO_BEATGRID,
@@ -46,11 +48,6 @@ needs_fixtures = pytest.mark.skipif(
 # drags the run's coverage under the floor on every machine but this one.
 
 
-# One MPEG-1 Layer III frame: 128kbps, 44100Hz, no padding, silent payload.
-# Enough for mutagen to find a sync word and treat the file as an MP3, which is
-# all these tests need of the audio.
-_MPEG_FRAME = b"\xff\xfb\x90\x00" + b"\x00" * 413
-
 # The frames Serato leaves on an analysed track, with stand-in payloads. Only
 # their presence and their bytes staying untouched matter here; the sibling
 # encoders own their contents.
@@ -65,7 +62,7 @@ _SIBLING_FRAMES = {
 
 @pytest.fixture
 def encoder():
-    return BeatgridMp3Encoder()
+    return BeatgridEncoder()
 
 
 @pytest.fixture
@@ -73,7 +70,7 @@ def analysed_mp3(tmp_path):
     """A synthetic stand-in for a Serato-analysed track: silent audio, six GEOB
     frames, a real one-marker grid among them."""
     path = tmp_path / "synthetic.mp3"
-    path.write_bytes(_MPEG_FRAME * 20)
+    path.write_bytes(MPEG_FRAME * 20)
     tags = MP3(path)
     for name, data in _SIBLING_FRAMES.items():
         tags[name] = id3.GEOB(
@@ -203,7 +200,7 @@ def test_reading_an_unreadable_frame_gives_an_empty_grid_rather_than_raising(
     encoder, analysed_mp3
 ):
     track = Track(path=analysed_mp3)
-    encoder._write(track, b"\x09\x09nonsense").save()
+    tag_io_for(track.path).write(encoder.markers_name, b"\x09\x09nonsense")
 
     assert encoder.read_beatgrid(track) == []
 
@@ -290,12 +287,13 @@ def test_an_unfamiliar_footer_byte_is_carried_not_replaced(tmp_path):  # pragma:
         pytest.skip("no fixture mp3s")
     path = tmp_path / "footer.mp3"
     shutil.copyfile(source, path)
-    encoder = BeatgridMp3Encoder()
+    encoder = BeatgridEncoder()
 
     track = Track(str(path))
     track.beatgrid = [Tempo(position=0.5, bpm=128.0)]
-    tagged = encoder._write(track, encoder._encode(track.beatgrid, footer=b"\x2a"))
-    tagged.save()
+    tag_io_for(track.path).write(
+        encoder.markers_name, encoder._encode(track.beatgrid, footer=b"\x2a")
+    )
 
     assert encoder.read_footer(track) == b"\x2a"
 
@@ -314,7 +312,7 @@ def test_a_file_with_no_frame_yet_gets_the_observed_default(tmp_path):  # pragma
         pytest.skip("no fixture mp3s")
     path = tmp_path / "fresh.mp3"
     shutil.copyfile(source, path)
-    encoder = BeatgridMp3Encoder()
+    encoder = BeatgridEncoder()
     tags = MP3(path)
     tags.pop(SERATO_BEATGRID, None)
     tags.save()

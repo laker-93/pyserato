@@ -1,7 +1,7 @@
 from mutagen.id3 import ID3
 from mutagen.mp3 import MP3
 
-from pyserato.encoders.v2_mp3_encoder import V2Mp3Encoder
+from pyserato.encoders.v2_encoder import V2Encoder
 from pyserato.builder import Builder
 from pyserato.model.track import Track
 from pyserato.model.crate import Crate
@@ -29,9 +29,9 @@ def clear_tags():
     track.save()
 
 def read_tags():
-    mp3_encoder = V2Mp3Encoder()
+    encoder = V2Encoder()
     track = Track.from_path(track_path)
-    cues = mp3_encoder.read_cues(track)
+    cues = encoder.read_cues(track)
     for cue in cues:
         print(cue)
 
@@ -41,8 +41,8 @@ def get_geob_tabs():
         print(frame)
 
 def write_tags():
-    mp3_encoder = V2Mp3Encoder()
-    builder = Builder(encoder=mp3_encoder)
+    encoder = V2Encoder()
+    builder = Builder(encoder=encoder)
     crate = Crate('foopython')
     track = Track.from_path(track_path)
     crate.add_track(track)
@@ -51,7 +51,7 @@ def write_tags():
     track.add_hot_cue(HotCue(name='looppython2', type=HotCueType.LOOP, start=4900, end=8600, index=2))
     builder.save(crate, overwrite=True)
     # or
-    #mp3_encoder.write(track)
+    #encoder.write(track)
 
 if __name__ == '__main__':
     #write_tags2()
