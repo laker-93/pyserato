@@ -89,9 +89,14 @@ class V2Encoder(BaseEncoder):
 
     def _remove_null_padding(self, payload: bytes):
         """
-        Used when reading the data from the tags
+        Used when reading the data from the tags.
+
+        Serato pads the base64 text with NULs up to a minimum size, but a
+        payload already past that size can arrive with no NUL at all; the
+        whole payload is the data then (laker-93/pyserato#19). tserato's
+        twin of this function has always read it that way.
         """
-        return payload[: payload.index(b"\x00")]
+        return payload.split(b"\x00", 1)[0]
 
     def _get_entry_name(self, fp) -> str:
         entry_name = b""
