@@ -38,4 +38,3 @@ def test_reads_cues_from_a_payload_with_one_trailing_nul():
     padded = _markers2(FIXTURES / "analysed.mp3")
     one_nul = padded.rstrip(b"\x00") + b"\x00"
     assert list(encoder._decode(one_nul)) == list(encoder._decode(padded))
-
